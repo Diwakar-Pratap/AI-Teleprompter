@@ -11,7 +11,10 @@ import numpy as np
 try:
     import pyaudiowpatch as pyaudio
 except ImportError:
-    import pyaudio
+    try:
+        import pyaudio
+    except ImportError:
+        pyaudio = None
 
 from app.audio.types import AudioSourceType, VADState, AudioChunk, AudioDevice, SpeakerRole
 from app.audio.devices import AudioDeviceManager
