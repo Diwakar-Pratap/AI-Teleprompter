@@ -8,8 +8,16 @@ Speech-to-Text Transcribers:
 import os
 from typing import Optional
 import numpy as np
-import speech_recognition as sr
-from faster_whisper import WhisperModel
+
+try:
+    import speech_recognition as sr
+except ImportError:
+    sr = None
+
+try:
+    from faster_whisper import WhisperModel
+except ImportError:
+    WhisperModel = None
 
 from app.logging.logger import get_logger
 
@@ -27,7 +35,11 @@ class GoogleSpeechTranscriber:
         self.api_key = api_key or os.getenv("GOOGLE_SPEECH_API_KEY") or os.getenv("GOOGLE_API_KEY")
         self.language = os.getenv("STT_LANGUAGE", language)
         self.language_code = self.language
-        self.recognizer = sr.Recognizer()
+        if sr is not None:
+            self.recognizer = sr.Recognizer()
+        else:
+            self.recognizer = None
+            logger.warning("speech_recognition library not installed, STT fallback active")
         logger.info("Google Speech-to-Text engine initialized", language=self.language, language_code=self.language_code, has_custom_key=bool(self.api_key))
 
     def transcribe(self, audio: np.ndarray) -> str:
@@ -35,7 +47,7 @@ class GoogleSpeechTranscriber:
         Synchronously transcribe float32 mono 16kHz audio array using Google Speech API.
         Returns transcribed text string.
         """
-        if len(audio) < 1600:  # Less than 0.1s
+        if len(audio) < 1600 or self.recognizer is None:
             return ""
 
         try:
@@ -72,8 +84,12 @@ class LocalTranscriber:
 
     def __init__(self, model_size: str = "tiny.en", device: str = "cpu", compute_type: str = "int8"):
         logger.info("Initializing faster-whisper STT engine...", model=model_size, device=device)
-        self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
-        logger.info("faster-whisper STT engine ready.")
+        if WhisperModel is not None:
+            self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
+            logger.info("faster-whisper STT engine ready.")
+        else:
+            self.model = None
+            logger.warning("faster_whisper not installed")
 
     @classmethod
     def get_instance(cls, model_size: str = "tiny.en") -> "LocalTranscriber":
@@ -86,7 +102,7 @@ class LocalTranscriber:
         Synchronously transcribe float32 mono 16kHz audio array.
         Returns transcribed text string.
         """
-        if len(audio) < 1600:  # Less than 0.1s
+        if len(audio) < 1600 or self.model is None:  # Less than 0.1s or no model
             return ""
 
         try:
