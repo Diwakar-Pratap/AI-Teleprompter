@@ -13,6 +13,13 @@ from pathlib import Path
 # Add the backend directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Patch sqlite3 with pysqlite3-binary if built-in _sqlite3 is missing on custom Linux builds
+try:
+    __import__("pysqlite3")
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+except (ImportError, KeyError):
+    pass
+
 
 def parse_args() -> argparse.Namespace:
     env_port_str = os.getenv("PORT", os.getenv("BACKEND_PORT", "8765"))

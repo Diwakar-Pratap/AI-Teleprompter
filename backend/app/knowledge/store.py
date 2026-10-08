@@ -6,12 +6,24 @@ Provides sub-5ms BM25 ranking and search over personal details, notes, and PDFs 
 import os
 import re
 import uuid
-import sqlite3
+
+try:
+    import sqlite3
+except (ImportError, ModuleNotFoundError):
+    try:
+        import pysqlite3 as sqlite3
+    except ImportError:
+        sqlite3 = None
+
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
-import fitz  # PyMuPDF for fast PDF parsing
+try:
+    import fitz  # PyMuPDF for fast PDF parsing
+except ImportError:
+    fitz = None
+
 from app.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -36,13 +48,18 @@ class KnowledgeStore:
             cls._instance = cls()
         return cls._instance
 
-    def _get_connection(self) -> sqlite3.Connection:
+    def _get_connection(self):
+        if sqlite3 is None:
+            return None
         conn = sqlite3.connect(str(self.db_path), timeout=10.0)
         conn.row_factory = sqlite3.Row
         return conn
 
     def _init_db(self) -> None:
         """Create tables for documents and FTS5 full-text search index."""
+        if sqlite3 is None:
+            logger.warning("sqlite3 is not available in this environment")
+            return
         with self._get_connection() as conn:
             cur = conn.cursor()
             # Metadata table
