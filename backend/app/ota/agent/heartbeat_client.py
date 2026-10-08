@@ -39,7 +39,8 @@ class HeartbeatAgent:
         """Register or update device information with backend."""
         profile = collect_system_profile(app_version=self.app_version, agent_version=self.agent_version)
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            headers = {"ngrok-skip-browser-warning": "69420", "User-Agent": "AITeleprompter/1.0"}
+            async with httpx.AsyncClient(timeout=5.0, headers=headers) as client:
                 resp = await client.post(f"{self.server_url}/api/v1/devices/register", json=profile)
                 if resp.status_code == 200:
                     data = resp.json()
@@ -61,7 +62,8 @@ class HeartbeatAgent:
             device_token = get_device_token()
 
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
+            headers = {"ngrok-skip-browser-warning": "69420", "User-Agent": "AITeleprompter/1.0"}
+            async with httpx.AsyncClient(timeout=4.0, headers=headers) as client:
                 resp = await client.post(
                     f"{self.server_url}/api/v1/devices/heartbeat",
                     json={
@@ -74,6 +76,7 @@ class HeartbeatAgent:
                 )
                 if resp.status_code == 200:
                     data = resp.json()
+
 
                     # Check for pending OTA job
                     pending_job = data.get("pending_ota_job")

@@ -276,6 +276,20 @@ async def update_device_name_endpoint(
     return {"status": "ok", "message": f"Device {device_id} renamed to {payload.device_name}"}
 
 
+@ota_router.delete("/devices/{device_id}")
+async def delete_device_endpoint(
+    device_id: str,
+    admin: Dict[str, Any] = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Permanently delete an SUT and its associated records."""
+    success = await device_service.delete_device(session, device_id, admin_user=admin.get("name", "Diwakar"))
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+    return {"status": "ok", "message": f"Device {device_id} deleted successfully"}
+
+
+
 
 # ─── License Endpoints ────────────────────────────────────────────────────────
 @ota_router.post("/license/validate", response_model=LicenseValidateResponse)

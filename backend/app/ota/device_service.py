@@ -432,3 +432,24 @@ async def revoke_device(session: AsyncSession, device_id: str, admin_user: str =
     await session.commit()
     await log_audit(session, "DEVICE_REVOKED", device_id, admin_user)
     return True
+
+
+async def delete_device(session: AsyncSession, device_id: str, admin_user: str = "Diwakar") -> bool:
+    """Permanently delete an SUT and all its associated records."""
+    result = await session.execute(
+        select(Device).options(
+            selectinload(Device.license),
+            selectinload(Device.ota_jobs),
+            selectinload(Device.usage_events),
+        ).where(Device.device_id == device_id)
+    )
+    device = result.scalar_one_or_none()
+    if not device:
+        return False
+
+    await session.delete(device)
+    await session.commit()
+    await log_audit(session, "DEVICE_DELETED", device_id, admin_user, {"deleted_at": datetime.utcnow().isoformat()})
+    logger.info("Device deleted permanently", device_id=device_id, admin_user=admin_user)
+    return True
+

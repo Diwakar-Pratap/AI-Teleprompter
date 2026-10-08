@@ -356,7 +356,10 @@
     }
 
     async function api(path, method = "GET", body = null) {
-      const headers = { "Content-Type": "application/json" };
+      const headers = {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "69420"
+      };
       if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
       const opts = { method, headers };
       if (body) opts.body = JSON.stringify(body);
@@ -389,7 +392,10 @@
       try {
         const res = await fetch(`${API}/api/v1/auth/login`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "69420"
+          },
           body: JSON.stringify({ email: "admin@teleprompter.local", password: "admin" })
         });
         if (res.ok) {
@@ -405,6 +411,7 @@
       }
       return false;
     }
+
 
     function showLoginModal() {
       const m = document.getElementById("modal-container");
@@ -842,11 +849,11 @@
           <td><span class="badge ${d.is_online ? 'badge-online' : 'badge-offline'}">${d.is_online ? '🟢 Online' : '🔴 Offline'}</span></td>
           <td><span class="badge ${d.is_blocked ? 'badge-blocked' : 'badge-success'}">${d.is_blocked ? '🔒 Blocked' : '✅ Active'}</span></td>
           <td style="text-align: right; white-space: nowrap;">
-            <button class="btn btn-secondary btn-sm" onclick="promptEditNickname('${d.device_id}', '${escapeAttr(d.device_name || d.hostname)}')">✏️ Rename</button>
             <button class="btn btn-secondary btn-sm" onclick="showDeviceModal('${d.device_id}')">Details</button>
             <button class="btn ${d.is_blocked ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockDevice('${d.device_id}', ${d.is_blocked})">
               ${d.is_blocked ? "Unblock" : "Block"}
             </button>
+            <button class="btn btn-danger btn-sm" onclick="deleteDevice('${d.device_id}')" title="Delete SUT Profile">🗑️</button>
           </td>
         </tr>
       `).join("");
@@ -897,6 +904,26 @@
         !isBlocked
       );
     }
+
+    function deleteDevice(id) {
+      showCustomConfirm(
+        "Delete System Under Test",
+        `Are you sure you want to permanently delete SUT <code>${id}</code>? This will remove its registration, hardware specs, license records, and usage logs.`,
+        async () => {
+          const res = await api(`/api/v1/devices/${id}`, "DELETE");
+          if (res && res.status === "ok") {
+            showToast(`Device ${id} deleted successfully`);
+            closeModal();
+            loadAllData();
+          } else {
+            showToast(`Failed to delete device ${id}`, "error");
+          }
+        },
+        "Permanently Delete",
+        true
+      );
+    }
+
 
     // ─── OTA JOBS VIEW ───────────────────────────────────────────────────────
     function renderOTAJobs(el) {
@@ -1283,7 +1310,11 @@
             <button class="btn btn-secondary btn-sm" onclick="changeLimit('${d.device_id}', ${d.license?.usage_limit || 100})">
               ⚡ Change Limit
             </button>
+            <button class="btn btn-danger btn-sm" onclick="deleteDevice('${d.device_id}')">
+              🗑️ Delete SUT Profile
+            </button>
           </div>
+
 
           <!-- Specs Grid -->
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; margin-bottom: 16px;">

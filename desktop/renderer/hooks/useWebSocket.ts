@@ -300,23 +300,35 @@ export function useWebSocket() {
 
   const registerDevice = useCallback(async () => {
     const sutInfo = getSUTInfo();
-    const targetUrl = backendUrl && backendUrl.startsWith("http") ? backendUrl : "https://salvaging-quiver-preheated.ngrok-free.dev";
-    try {
-      const res = await fetch(`${targetUrl}/api/v1/devices/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sutInfo),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.device_token) {
-          try {
-            localStorage.setItem("teleprompter_device_token", data.device_token);
-          } catch {}
+    const urls = [
+      backendUrl && backendUrl.startsWith("http") ? backendUrl : null,
+      "https://salvaging-quiver-preheated.ngrok-free.dev",
+      "http://127.0.0.1:8765",
+    ].filter(Boolean) as string[];
+
+    for (const targetUrl of urls) {
+      try {
+        const res = await fetch(`${targetUrl}/api/v1/devices/register`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "69420",
+            "User-Agent": "AITeleprompter/1.0",
+          },
+          body: JSON.stringify(sutInfo),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.device_token) {
+            try {
+              localStorage.setItem("teleprompter_device_token", data.device_token);
+            } catch {}
+            break;
+          }
         }
+      } catch (e) {
+        // try next url
       }
-    } catch (e) {
-      console.debug("[useWebSocket] Device register ping error:", e);
     }
   }, [backendUrl]);
 
@@ -327,20 +339,35 @@ export function useWebSocket() {
       token = localStorage.getItem("teleprompter_device_token") || "";
     } catch {}
 
-    const targetUrl = backendUrl && backendUrl.startsWith("http") ? backendUrl : "https://salvaging-quiver-preheated.ngrok-free.dev";
-
-    // 1. Send WebSocket handshake / heartbeat
+    // 1. Send WebSocket handshake / heartbeat pulse
     sendCommand("command.device_handshake", {
       ...sutInfo,
       device_token: token,
     });
 
+    if (!token) {
+      await registerDevice();
+      try {
+        token = localStorage.getItem("teleprompter_device_token") || "";
+      } catch {}
+    }
+
+    const urls = [
+      backendUrl && backendUrl.startsWith("http") ? backendUrl : null,
+      "https://salvaging-quiver-preheated.ngrok-free.dev",
+      "http://127.0.0.1:8765",
+    ].filter(Boolean) as string[];
+
     // 2. Send HTTP Heartbeat
-    if (token) {
+    for (const targetUrl of urls) {
       try {
         const res = await fetch(`${targetUrl}/api/v1/devices/heartbeat`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "69420",
+            "User-Agent": "AITeleprompter/1.0",
+          },
           body: JSON.stringify({
             device_id: sutInfo.device_id,
             device_token: token,
@@ -363,12 +390,14 @@ export function useWebSocket() {
               supportMessage: data.contact_info?.support_message || "For access activation or license upgrade.",
             });
           }
+          break;
         }
       } catch (e) {
-        console.debug("[useWebSocket] HTTP Heartbeat error:", e);
+        // try next
       }
     }
-  }, [backendUrl, sendCommand]);
+  }, [backendUrl, sendCommand, registerDevice]);
+
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;

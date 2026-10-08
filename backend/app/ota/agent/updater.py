@@ -39,7 +39,8 @@ class OTAUpdater:
     ) -> None:
         """Report progress state to central backend."""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            headers = {"ngrok-skip-browser-warning": "69420", "User-Agent": "AITeleprompter/1.0"}
+            async with httpx.AsyncClient(timeout=5.0, headers=headers) as client:
                 await client.post(
                     f"{self.server_url}/api/v1/ota/report",
                     json={
@@ -80,8 +81,9 @@ class OTAUpdater:
             full_url = package_url if package_url.startswith("http") else f"{self.server_url}{package_url}"
             pkg_bytes = b""
 
+            headers = {"ngrok-skip-browser-warning": "69420", "User-Agent": "AITeleprompter/1.0"}
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
                     resp = await client.get(full_url)
                     if resp.status_code == 200:
                         pkg_bytes = resp.content
@@ -90,6 +92,7 @@ class OTAUpdater:
                         pkg_bytes = f"package-data-for-{target_version}".encode("utf-8")
             except Exception:
                 pkg_bytes = f"package-data-for-{target_version}".encode("utf-8")
+
 
             # 2. VERIFYING
             await self._report_progress(job_id, device_id, device_token, "VERIFYING")
