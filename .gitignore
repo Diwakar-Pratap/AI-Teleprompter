@@ -1,0 +1,70 @@
+# Git ignore rules for AI Teleprompter
+
+# Environment — NEVER commit secrets
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Build outputs
+dist/
+dist-electron/
+release/
+build/
+out/
+
+# Database files (contain user data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Vector store files
+*.faiss
+*.index
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Python cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Electron
+.webpack/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# User data directories (created at runtime)
+~/.ai-teleprompter/
+
+# AI Teleprompter specific
+screenshots/
+audio_cache/
