@@ -286,6 +286,38 @@ async def handle_command(
                 {"previous": "IDLE", "current": "LISTENING"},
             )
 
+    elif command_type in ("command.device_handshake", "command.client_heartbeat"):
+        try:
+            from app.database.engine import AsyncSessionLocal
+            from app.ota.device_service import register_or_update_device
+            from app.ota.schemas import DeviceRegisterRequest
+            from app.ota.license_service import validate_device_license
+
+            dev_id = payload.get("device_id")
+            if dev_id:
+                async with AsyncSessionLocal() as db_session:
+                    reg_req = DeviceRegisterRequest(
+                        device_id=dev_id,
+                        device_name=payload.get("device_name") or payload.get("hostname") or f"SUT-{dev_id[:8]}",
+                        hostname=payload.get("hostname") or f"SUT-{dev_id[:8]}",
+                        os=payload.get("os") or "Windows",
+                        os_version=payload.get("os_version") or "10/11",
+                        cpu=payload.get("cpu") or "4 Cores",
+                        ram=payload.get("ram") or "8 GB",
+                        disk_space=payload.get("disk_space") or "50 GB",
+                        application_version=payload.get("application_version") or payload.get("app_version") or "0.1.0",
+                        agent_version=payload.get("agent_version") or "1.0.0",
+                    )
+                    dev, tok = await register_or_update_device(db_session, reg_req)
+                    logger.info("SUT presence updated via WebSocket handshake", device_id=dev_id, hostname=dev.hostname)
+
+                    lic_info = await validate_device_license(db_session, dev_id, tok, "0.1.0")
+                    await manager.send_event(websocket, "license.status", lic_info)
+                    if lic_info.get("is_blocked") or lic_info.get("status") == "blocked":
+                        await manager.send_event(websocket, "license.blocked", lic_info)
+        except Exception as e:
+            logger.warning("Error in device handshake handler", error=str(e))
+
     elif command_type == "command.sync_license":
         try:
             from app.database.engine import AsyncSessionLocal
@@ -294,8 +326,8 @@ async def handle_command(
             from app.ota.agent.license_client import ClientLicenseManager
 
             async with AsyncSessionLocal() as db_session:
-                dev_id = get_or_create_device_id()
-                dev_tok = get_device_token()
+                dev_id = payload.get("device_id") or get_or_create_device_id()
+                dev_tok = payload.get("device_token") or get_device_token()
                 lic_data = await validate_device_license(db_session, dev_id, dev_tok, "0.1.0")
 
             lic_mgr = ClientLicenseManager()

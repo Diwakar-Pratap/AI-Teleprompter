@@ -14,12 +14,43 @@ import type { WebSocketEvent, Question, ContextSource, SpeakerRole, AppState } f
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 
+function getSUTInfo() {
+  let deviceId = "";
+  try {
+    deviceId = localStorage.getItem("teleprompter_device_id") || "";
+  } catch {}
+  if (!deviceId) {
+    deviceId = `sut_${Math.random().toString(36).substring(2, 8)}_${Date.now().toString(36)}`;
+    try {
+      localStorage.setItem("teleprompter_device_id", deviceId);
+    } catch {}
+  }
+
+  const isWin = typeof navigator !== "undefined" && navigator.userAgent.includes("Windows");
+  const isMac = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac");
+  const osName = isWin ? "Windows" : isMac ? "macOS" : "Linux";
+  const hostname = `SUT-${osName}-${deviceId.slice(-6).toUpperCase()}`;
+
+  return {
+    device_id: deviceId,
+    device_name: hostname,
+    hostname: hostname,
+    os: osName,
+    os_version: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 60) : "Unknown",
+    cpu: typeof navigator !== "undefined" ? `${navigator.hardwareConcurrency || 4} Cores` : "4 Cores",
+    ram: typeof navigator !== "undefined" && (navigator as any).deviceMemory ? `${(navigator as any).deviceMemory} GB` : "8 GB",
+    disk_space: "50 GB",
+    application_version: "0.1.0",
+    agent_version: "1.0.0",
+  };
+}
+
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  const { wsUrl } = useConnectionStore();
+  const { wsUrl, backendUrl } = useConnectionStore();
 
   const handleEvent = useCallback((event: WebSocketEvent) => {
     const { type, payload } = event;
@@ -200,7 +231,6 @@ export function useWebSocket() {
         const qId = (payload["question_id"] as string) || "ai_stream";
         const answer = (payload["answer"] as string) ?? "";
         const sources = (payload["sources"] as ContextSource[]) ?? [];
-        const latencyMs = (payload["latency_ms"] as number) ?? 0;
         useChatStore.getState().finalizeChatMessage(qId, answer);
         useAnswerStore.getState().finalizeAnswer(answer, sources, latencyMs);
         useSessionStore.getState().setAppState("DISPLAYING");
@@ -256,6 +286,90 @@ export function useWebSocket() {
     }
   }, []);
 
+  const sendCommand = useCallback((type: string, payload?: Record<string, unknown>) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type,
+          payload: payload ?? {},
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+  }, []);
+
+  const registerDevice = useCallback(async () => {
+    const sutInfo = getSUTInfo();
+    const targetUrl = backendUrl && backendUrl.startsWith("http") ? backendUrl : "https://salvaging-quiver-preheated.ngrok-free.dev";
+    try {
+      const res = await fetch(`${targetUrl}/api/v1/devices/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sutInfo),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.device_token) {
+          try {
+            localStorage.setItem("teleprompter_device_token", data.device_token);
+          } catch {}
+        }
+      }
+    } catch (e) {
+      console.debug("[useWebSocket] Device register ping error:", e);
+    }
+  }, [backendUrl]);
+
+  const sendHeartbeat = useCallback(async () => {
+    const sutInfo = getSUTInfo();
+    let token = "";
+    try {
+      token = localStorage.getItem("teleprompter_device_token") || "";
+    } catch {}
+
+    const targetUrl = backendUrl && backendUrl.startsWith("http") ? backendUrl : "https://salvaging-quiver-preheated.ngrok-free.dev";
+
+    // 1. Send WebSocket handshake / heartbeat
+    sendCommand("command.device_handshake", {
+      ...sutInfo,
+      device_token: token,
+    });
+
+    // 2. Send HTTP Heartbeat
+    if (token) {
+      try {
+        const res = await fetch(`${targetUrl}/api/v1/devices/heartbeat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            device_id: sutInfo.device_id,
+            device_token: token,
+            hostname: sutInfo.hostname,
+            app_version: "0.1.0",
+            agent_version: "1.0.0",
+            os: sutInfo.os,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.is_blocked) {
+            useLicenseStore.getState().setLicenseState({
+              isBlocked: true,
+              status: "blocked",
+              deviceId: sutInfo.device_id,
+              usageConsumed: data.usage_consumed || 100,
+              usageLimit: data.usage_limit || 100,
+              contactName: data.contact_info?.contact_name || "Diwakar",
+              supportMessage: data.contact_info?.support_message || "For access activation or license upgrade.",
+            });
+          }
+        }
+      } catch (e) {
+        console.debug("[useWebSocket] HTTP Heartbeat error:", e);
+      }
+    }
+  }, [backendUrl, sendCommand]);
+
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
@@ -267,6 +381,7 @@ export function useWebSocket() {
     ws.onopen = () => {
       useConnectionStore.getState().setStatus("connected");
       reconnectAttempts.current = 0;
+      registerDevice().then(() => sendHeartbeat());
     };
 
     ws.onmessage = (event: MessageEvent) => {
@@ -287,7 +402,6 @@ export function useWebSocket() {
       useConnectionStore.getState().setStatus("disconnected");
       wsRef.current = null;
 
-      // Continuously retry with smart backoff (1.5s - 6s), never abandon connection permanently
       const delay = Math.min(
         1500 * Math.pow(1.2, Math.min(reconnectAttempts.current, 8)),
         6000
@@ -295,7 +409,7 @@ export function useWebSocket() {
       reconnectAttempts.current++;
       reconnectTimer.current = setTimeout(connect, delay);
     };
-  }, [wsUrl, handleEvent]);
+  }, [wsUrl, handleEvent, registerDevice, sendHeartbeat]);
 
   const disconnect = useCallback(() => {
     clearTimeout(reconnectTimer.current);
@@ -303,30 +417,20 @@ export function useWebSocket() {
     wsRef.current = null;
   }, []);
 
-  const sendCommand = useCallback((type: string, payload?: Record<string, unknown>) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(
-        JSON.stringify({
-          type,
-          payload: payload ?? {},
-          timestamp: new Date().toISOString(),
-        })
-      );
-    }
-  }, []);
-
   useEffect(() => {
     connect();
-    // Periodically sync license status with backend every 10 seconds
+    registerDevice().then(() => sendHeartbeat());
+
+    // Continuous heartbeat & SUT presence pulse every 15 seconds
     const interval = setInterval(() => {
-      sendCommand("command.sync_license");
-    }, 10000);
+      sendHeartbeat();
+    }, 15000);
 
     return () => {
       clearInterval(interval);
       disconnect();
     };
-  }, [connect, disconnect, sendCommand]);
+  }, [connect, disconnect, registerDevice, sendHeartbeat]);
 
   return { sendCommand, reconnect: connect };
 }
