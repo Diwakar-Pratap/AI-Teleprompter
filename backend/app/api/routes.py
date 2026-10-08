@@ -203,31 +203,56 @@ class SaveKeysRequest(BaseModel):
 
 
 def _persist_env_file_var(var_name: str, value: str) -> None:
-    """Safely persist variable into .env files on disk."""
+    """Safely persist variable into persistent SUT directory and local .env files on disk."""
+    import json
+    from pathlib import Path
+
+    sut_dir = Path.home() / ".ai-teleprompter"
+    sut_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Update ~/.ai-teleprompter/config.json
+    cfg_file = sut_dir / "config.json"
+    cfg_data = {}
+    if cfg_file.exists():
+        try:
+            with open(cfg_file, "r", encoding="utf-8") as f:
+                cfg_data = json.load(f)
+        except Exception:
+            pass
+    cfg_data[var_name.lower()] = value
+    try:
+        with open(cfg_file, "w", encoding="utf-8") as f:
+            json.dump(cfg_data, f, indent=2)
+    except Exception:
+        pass
+
+    # 2. Update ~/.ai-teleprompter/.env and workspace .env
     for env_path in [
+        str(sut_dir / ".env"),
         os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"),
         os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), ".env"),
         ".env",
         "backend/.env",
     ]:
-        if os.path.exists(env_path):
-            try:
+        try:
+            lines = []
+            if os.path.exists(env_path):
                 with open(env_path, "r", encoding="utf-8") as f:
                     lines = f.readlines()
-                found = False
-                new_lines = []
-                for line in lines:
-                    if line.strip().startswith(f"{var_name}=") and not line.strip().startswith("#"):
-                        new_lines.append(f"{var_name}={value}\n")
-                        found = True
-                    else:
-                        new_lines.append(line)
-                if not found:
+            found = False
+            new_lines = []
+            for line in lines:
+                if line.strip().startswith(f"{var_name}=") and not line.strip().startswith("#"):
                     new_lines.append(f"{var_name}={value}\n")
-                with open(env_path, "w", encoding="utf-8") as f:
-                    f.writelines(new_lines)
-            except Exception:
-                pass
+                    found = True
+                else:
+                    new_lines.append(line)
+            if not found:
+                new_lines.append(f"{var_name}={value}\n")
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+        except Exception:
+            pass
 
 
 @api_router.post("/settings/test-key")

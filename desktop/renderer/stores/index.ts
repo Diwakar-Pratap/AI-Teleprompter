@@ -24,8 +24,8 @@ interface ConnectionStore {
 
 export const useConnectionStore = create<ConnectionStore>((set) => ({
   status: "disconnected",
-  backendUrl: "http://127.0.0.1:8765",
-  wsUrl: "ws://127.0.0.1:8765/ws/events",
+  backendUrl: "https://salvaging-quiver-preheated.ngrok-free.dev",
+  wsUrl: "wss://salvaging-quiver-preheated.ngrok-free.dev/ws/events",
   backendVersion: "",
   setStatus: (status) => set({ status }),
   setUrls: (backendUrl, wsUrl) => set({ backendUrl, wsUrl }),

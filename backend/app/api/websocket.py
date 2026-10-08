@@ -97,6 +97,9 @@ async def handle_speech_final(speaker: str, text: str) -> None:
     Handle final transcribed speech segment from microphone or system speaker.
     Whenever a gap in speech occurs, automatically stream an AI co-pilot response.
     """
+    if not audio_manager.is_capturing:
+        return
+
     clean_text = text.strip()
     if not clean_text or len(clean_text) < 2:
         return

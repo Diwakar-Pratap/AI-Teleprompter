@@ -112,11 +112,33 @@ export class IPCManager {
       return this.securityManager.getBackendToken();
     });
 
-    // Settings pass-through (backend handles actual persistence)
+    // Settings / backend URL pass-through (smart failover from local to central ngrok server)
     ipcMain.handle("settings:get", async (): Promise<{ backendUrl: string; wsUrl: string }> => {
+      let isLocalRunning = false;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 800);
+        const res = await fetch(`http://${this.backendHost}:${this.backendPort}/health`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        isLocalRunning = res.ok;
+      } catch {
+        isLocalRunning = false;
+      }
+
+      if (isLocalRunning) {
+        return {
+          backendUrl: `http://${this.backendHost}:${this.backendPort}`,
+          wsUrl: `ws://${this.backendHost}:${this.backendPort}/ws/events`,
+        };
+      }
+
+      const remoteServer = process.env.TELEPROMPTER_SERVER_URL || "https://salvaging-quiver-preheated.ngrok-free.dev";
+      const wsRemote = remoteServer.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://") + "/ws/events";
       return {
-        backendUrl: `http://${this.backendHost}:${this.backendPort}`,
-        wsUrl: `ws://${this.backendHost}:${this.backendPort}/ws/events`,
+        backendUrl: remoteServer,
+        wsUrl: wsRemote,
       };
     });
 

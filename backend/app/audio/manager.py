@@ -80,7 +80,8 @@ class AudioManager:
 
         def callback(in_data, frame_count, time_info, status):
             if not self.is_capturing:
-                return (None, pyaudio.paContinue)
+                abort_status = getattr(pyaudio, "paAbort", 1) if pyaudio else 1
+                return (None, abort_status)
 
             try:
                 audio_np = np.frombuffer(in_data, dtype=np.float32)
@@ -152,7 +153,7 @@ class AudioManager:
                     frames = self.speech_frames[speaker]
                     self.speech_frames[speaker] = []
                     self._partial_busy[speaker] = False
-                    if frames:
+                    if frames and self.is_capturing:
                         total_audio = np.concatenate(frames)
                         # Require at least 0.15s of audio (2400 samples at 16kHz)
                         if len(total_audio) >= 2400 and self._loop and self._loop.is_running():
@@ -161,7 +162,7 @@ class AudioManager:
                                 self._loop,
                             )
 
-                if state_changed and self.event_callback and self._loop and self._loop.is_running():
+                if state_changed and self.event_callback and self._loop and self._loop.is_running() and self.is_capturing:
                     asyncio.run_coroutine_threadsafe(
                         self._dispatch_event(
                             "audio.vad_state_changed",
@@ -172,15 +173,22 @@ class AudioManager:
             except Exception as e:
                 logger.error("Error in audio stream callback", speaker=speaker, error=str(e))
 
-            return (None, pyaudio.paContinue)
+            abort_status = getattr(pyaudio, "paAbort", 1) if pyaudio else 1
+            cont_status = getattr(pyaudio, "paContinue", 0) if pyaudio else 0
+            return (None, cont_status if self.is_capturing else abort_status)
 
         return callback
 
     async def _transcribe_partial(self, speaker: SpeakerRole, audio_data: np.ndarray) -> None:
         """Run quick partial speech-to-text in worker thread and emit speech.partial event."""
+        if not self.is_capturing:
+            self._partial_busy[speaker] = False
+            return
         try:
             transcriber = get_transcriber()
             text = await asyncio.to_thread(transcriber.transcribe, audio_data)
+            if not self.is_capturing:
+                return
             text = text.strip()
             if text:
                 await self._dispatch_event(
@@ -197,9 +205,13 @@ class AudioManager:
 
     async def _transcribe_and_dispatch(self, speaker: SpeakerRole, audio_data: np.ndarray) -> None:
         """Run fast speech-to-text in worker thread and emit speech.final event."""
+        if not self.is_capturing:
+            return
         try:
             transcriber = get_transcriber()
             text = await asyncio.to_thread(transcriber.transcribe, audio_data)
+            if not self.is_capturing:
+                return
             text = text.strip()
             if not text:
                 return
