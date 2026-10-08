@@ -58,6 +58,11 @@ class DeviceHeartbeatRequest(BaseModel):
     usage_count: Optional[int] = None
 
 
+class DeviceNameUpdateRequest(BaseModel):
+    device_name: str
+
+
+
 class DeviceHeartbeatResponse(BaseModel):
     status: str  # "ok"
     device_id: str

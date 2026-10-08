@@ -240,8 +240,8 @@
       overflow: hidden;
       margin-top: 4px;
     }
-    .progress-bar-fill { height: 100%; background: var(--primary); border-radius: 3px; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
   </style>
 </head>
 <body>
@@ -571,13 +571,115 @@
       }
     }
 
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function escapeAttr(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/'/g, "\\'")
+        .replace(/"/g, "&quot;");
+    }
+
+    // ─── CUSTOM MODERN MODAL & POPUP DIALOGS ──────────────────────────────────
+    function showCustomConfirm(title, message, onConfirm, confirmText = "Confirm", isDanger = false) {
+      const m = document.getElementById("modal-container");
+      m.style.display = "flex";
+      m.className = "modal-backdrop";
+      m.innerHTML = `
+        <div class="modal-box" style="max-width: 420px; animation: fadeIn 0.18s ease;">
+          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: ${isDanger ? '#f87171' : '#f8fafc'};">${title}</h3>
+          <p style="font-size: 13px; color: #cbd5e1; line-height: 1.5; margin-bottom: 22px;">${message}</p>
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn ${isDanger ? 'btn-danger' : ''}" id="custom-modal-confirm-btn">${confirmText}</button>
+          </div>
+        </div>
+      `;
+      document.getElementById("custom-modal-confirm-btn").onclick = async () => {
+        closeModal();
+        if (onConfirm) await onConfirm();
+      };
+    }
+
+    function showCustomPrompt(title, message, defaultValue, onConfirm, placeholder = "") {
+      const m = document.getElementById("modal-container");
+      m.style.display = "flex";
+      m.className = "modal-backdrop";
+      m.innerHTML = `
+        <div class="modal-box" style="max-width: 440px; animation: fadeIn 0.18s ease;">
+          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: #f8fafc;">${title}</h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">${message}</p>
+          <input type="text" id="custom-prompt-input" value="${defaultValue !== undefined && defaultValue !== null ? defaultValue : ''}" placeholder="${placeholder}" style="width: 100%; margin-bottom: 18px; font-size: 13px; padding: 10px 12px;">
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn" id="custom-prompt-save-btn">Save</button>
+          </div>
+        </div>
+      `;
+      const input = document.getElementById("custom-prompt-input");
+      input.focus();
+      input.select();
+      input.onkeydown = (e) => {
+        if (e.key === "Enter") {
+          document.getElementById("custom-prompt-save-btn").click();
+        } else if (e.key === "Escape") {
+          closeModal();
+        }
+      };
+      document.getElementById("custom-prompt-save-btn").onclick = async () => {
+        const val = input.value.trim();
+        closeModal();
+        if (onConfirm) await onConfirm(val);
+      };
+    }
+
+    function showCustomAlert(title, message) {
+      const m = document.getElementById("modal-container");
+      m.style.display = "flex";
+      m.className = "modal-backdrop";
+      m.innerHTML = `
+        <div class="modal-box" style="max-width: 400px; animation: fadeIn 0.18s ease;">
+          <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #f8fafc;">${title}</h3>
+          <p style="font-size: 13px; color: #cbd5e1; line-height: 1.5; margin-bottom: 20px;">${message}</p>
+          <div style="display: flex; justify-content: flex-end;">
+            <button class="btn" onclick="closeModal()">OK</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function promptEditNickname(id, currentName) {
+      showCustomPrompt(
+        "Edit Device Nickname",
+        `Assign a friendly alias / nickname for device ID <strong>${id}</strong>:`,
+        currentName,
+        async (newName) => {
+          if (newName === null || newName === undefined) return;
+          const res = await api(`/api/v1/devices/${id}/name`, "POST", { device_name: newName });
+          if (res && res.status === "ok") {
+            showToast(`Device nickname updated to "${newName || id}"`);
+            loadAllData();
+          }
+        },
+        "e.g. Test Lab PC 1, QA Workstation..."
+      );
+    }
+
     // ─── DASHBOARD ───────────────────────────────────────────────────────────
     function renderDashboard(el) {
       const s = state.analytics?.summary || {
         total_devices: state.devices.length,
-        online_devices: state.devices.filter(d => d.status === 'online').length,
-        offline_devices: state.devices.filter(d => d.status === 'offline').length,
-        blocked_devices: state.devices.filter(d => d.status === 'blocked').length,
+        online_devices: state.devices.filter(d => d.is_online).length,
+        offline_devices: state.devices.filter(d => !d.is_online).length,
+        blocked_devices: state.devices.filter(d => d.is_blocked).length,
         current_version: "v0.1.0",
         total_updates: state.otaJobs.length,
         successful_updates: state.otaJobs.filter(j => j.status === 'SUCCESS').length,
@@ -640,21 +742,30 @@
             <thead>
               <tr>
                 <th>SUT Device ID</th>
+                <th>Device Name / Alias</th>
                 <th>Hostname</th>
                 <th>Version</th>
                 <th>Usage</th>
-                <th>Status</th>
+                <th>Presence</th>
+                <th>License</th>
                 <th style="text-align: right;">Action</th>
               </tr>
             </thead>
             <tbody>
               ${state.devices.slice(0, 5).map(d => `
                 <tr>
-                  <td style="font-family: monospace; font-weight: 600; color: #818cf8;">${d.device_id}</td>
+                  <td style="font-family: monospace; font-weight: 600; color: #818cf8; cursor: pointer;" onclick="showDeviceModal('${d.device_id}')">${d.device_id}</td>
+                  <td>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span style="font-weight: 600;">${escapeHtml(d.device_name || d.hostname)}</span>
+                      <button class="btn btn-secondary btn-sm" style="padding: 1px 5px; font-size: 10px;" onclick="promptEditNickname('${d.device_id}', '${escapeAttr(d.device_name || d.hostname)}')" title="Edit Nickname">✏️</button>
+                    </div>
+                  </td>
                   <td>${d.hostname}</td>
                   <td style="font-family: monospace; color: #38bdf8;">${d.application_version}</td>
                   <td>${d.usage_count} / ${d.usage_limit}</td>
-                  <td><span class="badge badge-${d.status}">${d.status}</span></td>
+                  <td><span class="badge ${d.is_online ? 'badge-online' : 'badge-offline'}">${d.is_online ? '🟢 Online' : '🔴 Offline'}</span></td>
+                  <td><span class="badge ${d.is_blocked ? 'badge-blocked' : 'badge-success'}">${d.is_blocked ? '🔒 Blocked' : '✅ Active'}</span></td>
                   <td style="text-align: right;">
                     <button class="btn btn-secondary btn-sm" onclick="showDeviceModal('${d.device_id}')">Inspect</button>
                   </td>
@@ -671,7 +782,7 @@
     function renderDevices(el) {
       let html = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px;">
-          <input type="text" id="dev-search" placeholder="Search SUT by ID, Hostname..." oninput="filterDevices()" style="width: 320px;">
+          <input type="text" id="dev-search" placeholder="Search SUT by ID, Nickname, Hostname..." oninput="filterDevices()" style="width: 340px;">
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary btn-sm" onclick="showBulkDeployModal()">🚀 Bulk OTA Deploy (${state.bulkSelection.length})</button>
           </div>
@@ -682,12 +793,14 @@
               <tr>
                 <th style="width: 30px;"><input type="checkbox" onchange="toggleSelectAll(this)"></th>
                 <th>Device ID</th>
+                <th>Device Name / Alias</th>
                 <th>Hostname</th>
                 <th>IP Address</th>
                 <th>OS</th>
                 <th>App Version</th>
                 <th>Usage Consumed</th>
-                <th>Status</th>
+                <th>Presence</th>
+                <th>License</th>
                 <th style="text-align: right;">Actions</th>
               </tr>
             </thead>
@@ -701,10 +814,19 @@
     }
 
     function renderDeviceRows(list) {
+      if (!list || list.length === 0) {
+        return `<tr><td colspan="11" style="text-align: center; color: var(--text-muted); padding: 24px;">No devices found.</td></tr>`;
+      }
       return list.map(d => `
         <tr>
           <td><input type="checkbox" value="${d.device_id}" onchange="toggleSelectOne('${d.device_id}')" ${state.bulkSelection.includes(d.device_id) ? "checked" : ""}></td>
           <td style="font-family: monospace; font-weight: 600; color: #818cf8; cursor: pointer;" onclick="showDeviceModal('${d.device_id}')">${d.device_id}</td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-weight: 600; color: #f1f5f9;">${escapeHtml(d.device_name || d.hostname)}</span>
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" onclick="promptEditNickname('${d.device_id}', '${escapeAttr(d.device_name || d.hostname)}')" title="Edit Nickname">✏️</button>
+            </div>
+          </td>
           <td>${d.hostname}</td>
           <td style="font-family: monospace; font-size: 11px; color: var(--text-muted);">${d.ip_address || "127.0.0.1"}</td>
           <td>${d.os}</td>
@@ -717,8 +839,10 @@
               </div>
             </div>
           </td>
-          <td><span class="badge badge-${d.status}">${d.status}</span></td>
-          <td style="text-align: right;">
+          <td><span class="badge ${d.is_online ? 'badge-online' : 'badge-offline'}">${d.is_online ? '🟢 Online' : '🔴 Offline'}</span></td>
+          <td><span class="badge ${d.is_blocked ? 'badge-blocked' : 'badge-success'}">${d.is_blocked ? '🔒 Blocked' : '✅ Active'}</span></td>
+          <td style="text-align: right; white-space: nowrap;">
+            <button class="btn btn-secondary btn-sm" onclick="promptEditNickname('${d.device_id}', '${escapeAttr(d.device_name || d.hostname)}')">✏️ Rename</button>
             <button class="btn btn-secondary btn-sm" onclick="showDeviceModal('${d.device_id}')">Details</button>
             <button class="btn ${d.is_blocked ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockDevice('${d.device_id}', ${d.is_blocked})">
               ${d.is_blocked ? "Unblock" : "Block"}
@@ -732,6 +856,7 @@
       const q = document.getElementById("dev-search").value.toLowerCase();
       const filtered = state.devices.filter(d =>
         d.device_id.toLowerCase().includes(q) ||
+        (d.device_name || "").toLowerCase().includes(q) ||
         d.hostname.toLowerCase().includes(q) ||
         d.application_version.toLowerCase().includes(q)
       );
@@ -756,14 +881,21 @@
       renderDevices(document.getElementById("viewport"));
     }
 
-    async function toggleBlockDevice(id, isBlocked) {
+    function toggleBlockDevice(id, isBlocked) {
       const action = isBlocked ? "unblock" : "block";
-      if (!confirm(`Are you sure you want to ${action} ${id}?`)) return;
-      const res = await api(`/api/v1/devices/${id}/${action}`, "POST");
-      if (res && res.status === "ok") {
-        showToast(`Device ${id} ${action}ed`);
-        loadAllData();
-      }
+      showCustomConfirm(
+        `${isBlocked ? 'Unblock' : 'Block'} Device`,
+        `Are you sure you want to <strong>${action.toUpperCase()}</strong> SUT <code>${id}</code>? ${isBlocked ? 'The device will regain access immediately.' : 'The device will be prevented from generating answers.'}`,
+        async () => {
+          const res = await api(`/api/v1/devices/${id}/${action}`, "POST");
+          if (res && res.status === "ok") {
+            showToast(`Device ${id} ${action}ed`);
+            loadAllData();
+          }
+        },
+        isBlocked ? "Unblock SUT" : "Block SUT",
+        !isBlocked
+      );
     }
 
     // ─── OTA JOBS VIEW ───────────────────────────────────────────────────────
@@ -893,23 +1025,41 @@
       el.innerHTML = html;
     }
 
-    async function resetUsage(id) {
-      if (!confirm(`Reset usage counter to 0 for ${id}?`)) return;
-      const res = await api(`/api/v1/devices/${id}/reset-usage`, "POST");
-      if (res && res.status === "ok") {
-        showToast(`Usage counter reset for ${id}`);
-        loadAllData();
-      }
+    function resetUsage(id) {
+      showCustomConfirm(
+        "Reset Consumed Usage",
+        `Reset the usage counter to <strong>0</strong> for SUT <code>${id}</code>?`,
+        async () => {
+          const res = await api(`/api/v1/devices/${id}/reset-usage`, "POST");
+          if (res && res.status === "ok") {
+            showToast(`Usage counter reset for ${id}`);
+            loadAllData();
+          }
+        },
+        "Reset Counter",
+        false
+      );
     }
 
-    async function changeLimit(id, cur) {
-      const v = prompt(`Set new free limit for ${id}:`, cur);
-      if (!v || isNaN(v)) return;
-      const res = await api(`/api/v1/licenses/${id}`, "PUT", { usage_limit: parseInt(v) });
-      if (res && res.status === "ok") {
-        showToast(`Limit updated to ${v}`);
-        loadAllData();
-      }
+    function changeLimit(id, cur) {
+      showCustomPrompt(
+        "Update Free Limit",
+        `Set new free usage limit for SUT <code>${id}</code>:`,
+        cur,
+        async (newLimit) => {
+          const parsed = parseInt(newLimit);
+          if (isNaN(parsed) || parsed <= 0) {
+            showToast("Please enter a valid positive number", "error");
+            return;
+          }
+          const res = await api(`/api/v1/licenses/${id}`, "PUT", { usage_limit: parsed });
+          if (res && res.status === "ok") {
+            showToast(`Limit updated to ${parsed}`);
+            loadAllData();
+          }
+        },
+        "e.g. 100, 200, 500"
+      );
     }
 
     // ─── ANALYTICS VIEW ──────────────────────────────────────────────────────
@@ -1103,22 +1253,35 @@
       m.style.display = "flex";
       m.className = "modal-backdrop";
       m.innerHTML = `
-        <div class="modal-box">
+        <div class="modal-box" style="animation: fadeIn 0.18s ease;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 1px solid var(--card-border); padding-bottom: 12px;">
             <div>
-              <div style="font-family: monospace; font-size: 18px; font-weight: 700; color: #818cf8;">${d.device_id}</div>
-              <div style="font-size: 12px; color: var(--text-muted);">${d.hostname} (${d.ip_address || "127.0.0.1"})</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px; font-weight: 700; color: #fff;">${escapeHtml(d.device_name || d.hostname)}</span>
+                <button class="btn btn-secondary btn-sm" style="padding: 2px 7px; font-size: 11px;" onclick="promptEditNickname('${d.device_id}', '${escapeAttr(d.device_name || d.hostname)}')">✏️ Rename</button>
+              </div>
+              <div style="font-family: monospace; font-size: 12px; color: #818cf8; margin-top: 2px;">ID: ${d.device_id}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${d.hostname} (${d.ip_address || "127.0.0.1"})</div>
             </div>
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">✕</button>
           </div>
 
+          <!-- Status & Badges -->
+          <div style="display: flex; gap: 8px; margin-bottom: 14px; align-items: center;">
+            <span class="badge ${d.is_online ? 'badge-online' : 'badge-offline'}">${d.is_online ? '🟢 Online' : '🔴 Offline'}</span>
+            <span class="badge ${d.is_blocked ? 'badge-blocked' : 'badge-success'}">${d.is_blocked ? '🔒 Blocked' : '✅ Active License'}</span>
+          </div>
+
           <!-- Quick Action Bar -->
-          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-            <button class="btn ${d.is_blocked ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockDevice('${d.device_id}', ${d.is_blocked}); closeModal();">
+          <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+            <button class="btn ${d.is_blocked ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockDevice('${d.device_id}', ${d.is_blocked})">
               ${d.is_blocked ? "🟢 Unblock SUT" : "🛑 Block SUT"}
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="resetUsage('${d.device_id}'); closeModal();">
-              🔄 Reset Free Usage (0 / ${d.license?.usage_limit || 100})
+            <button class="btn btn-secondary btn-sm" onclick="resetUsage('${d.device_id}')">
+              🔄 Reset Usage (0 / ${d.license?.usage_limit || 100})
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="changeLimit('${d.device_id}', ${d.license?.usage_limit || 100})">
+              ⚡ Change Limit
             </button>
           </div>
 
@@ -1130,8 +1293,8 @@
             <div class="card"><div class="card-title">Disk Storage</div><div>${d.disk_space}</div></div>
             <div class="card"><div class="card-title">Installed Version</div><div style="color: #38bdf8; font-family: monospace; font-weight: bold;">${d.application_version}</div></div>
             <div class="card"><div class="card-title">Agent Version</div><div>${d.agent_version}</div></div>
-            <div class="card"><div class="card-title">Last Heartbeat</div><div>${new Date(d.last_heartbeat).toLocaleTimeString()}</div></div>
-            <div class="card"><div class="card-title">License Status</div><div><span class="badge badge-${d.license?.status}">${d.license?.status}</span></div></div>
+            <div class="card"><div class="card-title">Last Heartbeat</div><div>${new Date(d.last_heartbeat).toLocaleString()}</div></div>
+            <div class="card"><div class="card-title">Usage Consumed</div><div>${d.license?.usage_consumed || 0} / ${d.license?.usage_limit || 100} (${d.license?.usage_remaining || 0} left)</div></div>
           </div>
 
           <!-- Remote Upgrade / Downgrade -->
@@ -1150,22 +1313,28 @@
       `;
     }
 
-    async function dispatchOTA(devId, curVer) {
+    function dispatchOTA(devId, curVer) {
       const target = document.getElementById("modal-target-ver").value;
       if (!target) return;
       const isDowngrade = target < curVer;
-      if (!confirm(`Dispatch ${isDowngrade ? 'DOWNGRADE' : 'UPGRADE'} of ${devId} to ${target}?`)) return;
-
-      const res = await api("/api/v1/ota/jobs", "POST", {
-        device_id: devId,
-        target_version: target,
-        job_type: isDowngrade ? "downgrade" : "upgrade"
-      });
-      if (res && res.status === "ok") {
-        showToast(`OTA job created for ${devId} -> ${target}`);
-        closeModal();
-        loadAllData();
-      }
+      showCustomConfirm(
+        `Schedule OTA ${isDowngrade ? 'Downgrade' : 'Upgrade'}`,
+        `Dispatch <strong>${isDowngrade ? 'DOWNGRADE' : 'UPGRADE'}</strong> of SUT <code>${devId}</code> from <code>${curVer}</code> to <code>${target}</code>?`,
+        async () => {
+          const res = await api("/api/v1/ota/jobs", "POST", {
+            device_id: devId,
+            target_version: target,
+            job_type: isDowngrade ? "downgrade" : "upgrade"
+          });
+          if (res && res.status === "ok") {
+            showToast(`OTA job created for ${devId} -> ${target}`);
+            closeModal();
+            loadAllData();
+          }
+        },
+        `Deploy ${target}`,
+        isDowngrade
+      );
     }
 
     // ─── MODALS ──────────────────────────────────────────────────────────────
@@ -1174,13 +1343,13 @@
       m.style.display = "flex";
       m.className = "modal-backdrop";
       m.innerHTML = `
-        <div class="modal-box" style="max-width: 420px;">
+        <div class="modal-box" style="max-width: 420px; animation: fadeIn 0.18s ease;">
           <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Schedule OTA Update</h3>
           <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
             <div>
               <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Target Device</label>
               <select id="single-dev" style="width: 100%;">
-                ${state.devices.map(d => `<option value="${d.device_id}">${d.device_id} (${d.hostname}) - ${d.application_version}</option>`).join("")}
+                ${state.devices.map(d => `<option value="${d.device_id}">${escapeHtml(d.device_name || d.hostname)} (${d.device_id}) - ${d.application_version}</option>`).join("")}
               </select>
             </div>
             <div>
@@ -1215,7 +1384,7 @@
       m.style.display = "flex";
       m.className = "modal-backdrop";
       m.innerHTML = `
-        <div class="modal-box" style="max-width: 440px;">
+        <div class="modal-box" style="max-width: 440px; animation: fadeIn 0.18s ease;">
           <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px;">Bulk OTA Deployment</h3>
           <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Deploying simultaneous update across ${ids.length} selected SUTs.</p>
           <div style="max-height: 100px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; font-family: monospace; font-size: 11px; color: var(--text-muted); margin-bottom: 14px;">
@@ -1251,7 +1420,7 @@
       m.style.display = "flex";
       m.className = "modal-backdrop";
       m.innerHTML = `
-        <div class="modal-box" style="max-width: 440px;">
+        <div class="modal-box" style="max-width: 440px; animation: fadeIn 0.18s ease;">
           <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Register New Version</h3>
           <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
             <div>
@@ -1299,6 +1468,7 @@
         loadAllData();
       }
     }
+
 
     function closeModal() {
       document.getElementById("modal-container").style.display = "none";

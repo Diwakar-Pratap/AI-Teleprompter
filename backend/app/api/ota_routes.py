@@ -16,6 +16,7 @@ from app.ota.schemas import (
     DeviceRegisterRequest,
     DeviceHeartbeatRequest,
     DeviceHeartbeatResponse,
+    DeviceNameUpdateRequest,
     LicenseValidateRequest,
     LicenseValidateResponse,
     LicenseUpdateRequest,
@@ -253,6 +254,27 @@ async def revoke_device_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
     await broadcast_license_update(device_id, session)
     return {"status": "ok", "message": f"Device credentials revoked for {device_id}"}
+
+
+@ota_router.post("/devices/{device_id}/name")
+@ota_router.put("/devices/{device_id}/name")
+async def update_device_name_endpoint(
+    device_id: str,
+    payload: DeviceNameUpdateRequest,
+    admin: Dict[str, Any] = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Update custom device nickname / name."""
+    success = await device_service.update_device_name(
+        session,
+        device_id=device_id,
+        new_name=payload.device_name,
+        admin_user=admin.get("name", "Diwakar"),
+    )
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+    return {"status": "ok", "message": f"Device {device_id} renamed to {payload.device_name}"}
+
 
 
 # ─── License Endpoints ────────────────────────────────────────────────────────

@@ -214,15 +214,19 @@ async def list_devices(
     device_list = []
     for d in devices:
         is_online = (now - d.last_heartbeat) < timeout
-        computed_status = "blocked" if d.is_blocked else ("online" if is_online else "offline")
+        presence = "online" if is_online else "offline"
 
-        if status_filter and computed_status != status_filter:
-            continue
+        if status_filter:
+            if status_filter == "blocked" and not d.is_blocked:
+                continue
+            elif status_filter in ("online", "offline") and presence != status_filter:
+                continue
 
         if search:
             s_lower = search.lower()
             if (
                 s_lower not in d.device_id.lower()
+                and s_lower not in (d.device_name or "").lower()
                 and s_lower not in d.hostname.lower()
                 and s_lower not in (d.ip_address or "").lower()
                 and s_lower not in d.application_version.lower()
@@ -245,7 +249,8 @@ async def list_devices(
             "python_version": d.python_version,
             "application_version": d.application_version,
             "agent_version": d.agent_version,
-            "status": computed_status,
+            "status": presence,
+            "is_online": is_online,
             "is_blocked": d.is_blocked,
             "last_seen": d.last_seen.isoformat(),
             "last_heartbeat": d.last_heartbeat.isoformat(),
@@ -256,6 +261,25 @@ async def list_devices(
         })
 
     return device_list
+
+
+async def get_device_by_id(session: AsyncSession, device_id: str) -> Optional[Device]:
+    """Retrieve raw Device model by device_id."""
+    result = await session.execute(
+        select(Device).options(selectinload(Device.license)).where(Device.device_id == device_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_device_name(session: AsyncSession, device_id: str, new_name: str, admin_user: str = "Diwakar") -> bool:
+    """Update nickname / friendly name for an SUT."""
+    device = await get_device_by_id(session, device_id)
+    if not device:
+        return False
+    device.device_name = new_name.strip() if new_name else device.hostname
+    await session.commit()
+    await log_audit(session, "DEVICE_RENAMED", device_id, admin_user, {"new_name": device.device_name})
+    return True
 
 
 async def get_device_detail(session: AsyncSession, device_id: str) -> Optional[Dict[str, Any]]:
@@ -271,7 +295,7 @@ async def get_device_detail(session: AsyncSession, device_id: str) -> Optional[D
 
     now = datetime.utcnow()
     is_online = (now - device.last_heartbeat) < timedelta(minutes=2)
-    computed_status = "blocked" if device.is_blocked else ("online" if is_online else "offline")
+    presence = "online" if is_online else "offline"
 
     lic = device.license
 
@@ -306,7 +330,8 @@ async def get_device_detail(session: AsyncSession, device_id: str) -> Optional[D
         "python_version": device.python_version,
         "application_version": device.application_version,
         "agent_version": device.agent_version,
-        "status": computed_status,
+        "status": presence,
+        "is_online": is_online,
         "is_blocked": device.is_blocked,
         "last_seen": device.last_seen.isoformat(),
         "last_heartbeat": device.last_heartbeat.isoformat(),
