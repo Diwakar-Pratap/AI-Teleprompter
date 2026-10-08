@@ -22,7 +22,7 @@ CACHE_FILE = CONFIG_DIR / "license_cache.json"
 class ClientLicenseManager:
     """Client-side license coordinator with offline grace period caching."""
 
-    def __init__(self, server_url: str = "http://127.0.0.1:8765"):
+    def __init__(self, server_url: str = "https://salvaging-quiver-preheated.ngrok-free.dev"):
         self.server_url = server_url.rstrip("/")
         self.current_state: Dict[str, Any] = self._load_cache() or {
             "device_id": get_or_create_device_id(),

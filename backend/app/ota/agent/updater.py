@@ -24,7 +24,7 @@ PACKAGE_DIR = CONFIG_DIR / "packages"
 class OTAUpdater:
     """Handles safe OTA updates with automatic rollback on health-check failure."""
 
-    def __init__(self, server_url: str = "http://127.0.0.1:8765"):
+    def __init__(self, server_url: str = "https://salvaging-quiver-preheated.ngrok-free.dev"):
         self.server_url = server_url.rstrip("/")
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
         PACKAGE_DIR.mkdir(parents=True, exist_ok=True)

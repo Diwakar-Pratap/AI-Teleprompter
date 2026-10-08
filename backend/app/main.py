@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await init_default_versions(session)
 
         if os.getenv("TESTING") != "1":
-            server_url = os.getenv("OTA_SERVER_URL", os.getenv("CENTRAL_SERVER_URL", "http://127.0.0.1:8765"))
+            server_url = os.getenv("OTA_SERVER_URL", os.getenv("CENTRAL_SERVER_URL", "https://salvaging-quiver-preheated.ngrok-free.dev"))
             interval = int(os.getenv("OTA_HEARTBEAT_INTERVAL", "30"))
             heartbeat_agent = HeartbeatAgent(
                 server_url=server_url,

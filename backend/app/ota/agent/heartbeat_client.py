@@ -20,7 +20,7 @@ class HeartbeatAgent:
 
     def __init__(
         self,
-        server_url: str = "http://127.0.0.1:8765",
+        server_url: str = "https://salvaging-quiver-preheated.ngrok-free.dev",
         interval_seconds: int = 60,
         app_version: str = "0.1.0",
         agent_version: str = "1.0.0",
