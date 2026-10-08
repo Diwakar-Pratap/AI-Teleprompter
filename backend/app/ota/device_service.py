@@ -453,3 +453,27 @@ async def delete_device(session: AsyncSession, device_id: str, admin_user: str =
     logger.info("Device deleted permanently", device_id=device_id, admin_user=admin_user)
     return True
 
+
+async def cleanup_stale_devices(session: AsyncSession, admin_user: str = "Diwakar") -> int:
+    """Permanently delete all offline/stale SUTs."""
+    devices = (await session.execute(
+        select(Device).options(
+            selectinload(Device.license),
+            selectinload(Device.ota_jobs),
+            selectinload(Device.usage_events),
+        )
+    )).scalars().all()
+    now = datetime.utcnow()
+    timeout = timedelta(minutes=3)
+    deleted_count = 0
+    for d in devices:
+        is_online = (now - d.last_heartbeat) < timeout
+        if not is_online or d.device_id.startswith("sut_") or d.device_id.startswith("SUT-TEST-"):
+            await session.delete(d)
+            deleted_count += 1
+    await session.commit()
+    await log_audit(session, "DEVICES_CLEANUP_STALE", "BULK", admin_user, {"deleted_count": deleted_count})
+    logger.info("Stale devices cleaned up", count=deleted_count, admin_user=admin_user)
+    return deleted_count
+
+

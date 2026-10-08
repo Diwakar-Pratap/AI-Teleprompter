@@ -791,6 +791,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px;">
           <input type="text" id="dev-search" placeholder="Search SUT by ID, Nickname, Hostname..." oninput="filterDevices()" style="width: 340px;">
           <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" onclick="cleanupStaleDevices()" title="Remove inactive/offline test devices">🧹 Clean Inactive SUTs</button>
             <button class="btn btn-secondary btn-sm" onclick="showBulkDeployModal()">🚀 Bulk OTA Deploy (${state.bulkSelection.length})</button>
           </div>
         </div>
@@ -910,19 +911,42 @@
         "Delete System Under Test",
         `Are you sure you want to permanently delete SUT <code>${id}</code>? This will remove its registration, hardware specs, license records, and usage logs.`,
         async () => {
-          const res = await api(`/api/v1/devices/${id}`, "DELETE");
+          let res = await api(`/api/v1/devices/${id}`, "DELETE");
+          if (!res || res.status !== "ok") {
+            // Fallback to POST delete endpoint if DELETE method is blocked
+            res = await api(`/api/v1/devices/${id}/delete`, "POST");
+          }
           if (res && res.status === "ok") {
             showToast(`Device ${id} deleted successfully`);
             closeModal();
             loadAllData();
           } else {
-            showToast(`Failed to delete device ${id}`, "error");
+            showToast(`Failed to delete device ${id}. Check server connection.`, "error");
           }
         },
         "Permanently Delete",
         true
       );
     }
+
+    function cleanupStaleDevices() {
+      showCustomConfirm(
+        "Clean Up Inactive SUTs",
+        "Are you sure you want to remove all inactive / offline devices and test profiles from the portal? Active online SUTs will remain untouched.",
+        async () => {
+          const res = await api("/api/v1/devices/cleanup-stale", "POST");
+          if (res && res.status === "ok") {
+            showToast(res.message || `Cleaned up ${res.deleted_count || 0} stale devices`);
+            loadAllData();
+          } else {
+            showToast("Failed to cleanup stale devices", "error");
+          }
+        },
+        "Clean Inactive SUTs",
+        true
+      );
+    }
+
 
 
     // ─── OTA JOBS VIEW ───────────────────────────────────────────────────────

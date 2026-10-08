@@ -480,6 +480,8 @@ async def websocket_events(websocket: WebSocket) -> None:
             "version": "0.1.0",
             "message": "AI Teleprompter backend connected",
             "audio_capturing": audio_manager.is_capturing,
+            "device_id": dev_id,
+            "device_token": dev_tok,
             "license": lic_data,
         },
     )

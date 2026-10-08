@@ -21,7 +21,7 @@ class HeartbeatAgent:
     def __init__(
         self,
         server_url: str = "https://salvaging-quiver-preheated.ngrok-free.dev",
-        interval_seconds: int = 60,
+        interval_seconds: int = 15,
         app_version: str = "0.1.0",
         agent_version: str = "1.0.0",
         on_license_change: Optional[Callable[[Dict[str, Any]], None]] = None,

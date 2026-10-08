@@ -18,18 +18,17 @@ function getSUTInfo() {
   let deviceId = "";
   try {
     deviceId = localStorage.getItem("teleprompter_device_id") || "";
+    if (deviceId.startsWith("sut_")) {
+      deviceId = "";
+      localStorage.removeItem("teleprompter_device_id");
+      localStorage.removeItem("teleprompter_device_token");
+    }
   } catch {}
-  if (!deviceId) {
-    deviceId = `sut_${Math.random().toString(36).substring(2, 8)}_${Date.now().toString(36)}`;
-    try {
-      localStorage.setItem("teleprompter_device_id", deviceId);
-    } catch {}
-  }
 
   const isWin = typeof navigator !== "undefined" && navigator.userAgent.includes("Windows");
   const isMac = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac");
   const osName = isWin ? "Windows" : isMac ? "macOS" : "Linux";
-  const hostname = `SUT-${osName}-${deviceId.slice(-6).toUpperCase()}`;
+  const hostname = deviceId ? `SUT-${osName}-${deviceId.slice(-6).toUpperCase()}` : `SUT-${osName}-CLIENT`;
 
   return {
     device_id: deviceId,
@@ -69,11 +68,24 @@ export function useWebSocket() {
         useAnswerStore.getState().clearAnswer();
         useChatStore.getState().clearChat();
 
+        const devId = (payload["device_id"] as string) || (payload["license"] as any)?.device_id;
+        const devTok = (payload["device_token"] as string) || (payload["license"] as any)?.device_token;
+        if (devId) {
+          try {
+            localStorage.setItem("teleprompter_device_id", devId);
+          } catch {}
+        }
+        if (devTok) {
+          try {
+            localStorage.setItem("teleprompter_device_token", devTok);
+          } catch {}
+        }
+
         if (payload["license"]) {
           const lic = payload["license"] as Record<string, unknown>;
           const isBlk = Boolean(lic["is_blocked"]) || lic["status"] === "blocked";
           useLicenseStore.getState().setLicenseState({
-            deviceId: (lic["device_id"] as string) || "",
+            deviceId: (lic["device_id"] as string) || devId || "",
             status: (lic["status"] as "active" | "blocked" | "expired") || "active",
             isBlocked: isBlk,
             usageLimit: (lic["usage_limit"] as number) ?? 100,
@@ -300,6 +312,7 @@ export function useWebSocket() {
 
   const registerDevice = useCallback(async () => {
     const sutInfo = getSUTInfo();
+    if (!sutInfo.device_id) return;
     const urls = [
       backendUrl && backendUrl.startsWith("http") ? backendUrl : null,
       "https://salvaging-quiver-preheated.ngrok-free.dev",
@@ -340,10 +353,14 @@ export function useWebSocket() {
     } catch {}
 
     // 1. Send WebSocket handshake / heartbeat pulse
-    sendCommand("command.device_handshake", {
-      ...sutInfo,
-      device_token: token,
-    });
+    if (sutInfo.device_id) {
+      sendCommand("command.device_handshake", {
+        ...sutInfo,
+        device_token: token,
+      });
+    }
+
+    if (!sutInfo.device_id) return;
 
     if (!token) {
       await registerDevice();

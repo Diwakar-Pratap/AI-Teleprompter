@@ -276,7 +276,19 @@ async def update_device_name_endpoint(
     return {"status": "ok", "message": f"Device {device_id} renamed to {payload.device_name}"}
 
 
+@ota_router.delete("/devices/stale")
+@ota_router.post("/devices/cleanup-stale")
+async def cleanup_stale_devices_endpoint(
+    admin: Dict[str, Any] = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Clean up and remove all offline / stale SUTs."""
+    deleted_count = await device_service.cleanup_stale_devices(session, admin_user=admin.get("name", "Diwakar"))
+    return {"status": "ok", "deleted_count": deleted_count, "message": f"Successfully cleaned up {deleted_count} stale devices"}
+
+
 @ota_router.delete("/devices/{device_id}")
+@ota_router.post("/devices/{device_id}/delete")
 async def delete_device_endpoint(
     device_id: str,
     admin: Dict[str, Any] = Depends(get_current_admin),
@@ -287,6 +299,7 @@ async def delete_device_endpoint(
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
     return {"status": "ok", "message": f"Device {device_id} deleted successfully"}
+
 
 
 
