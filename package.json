@@ -29,6 +29,7 @@
     "typescript": "^5.9.3",
     "vite": "^5.4.21"
   },
+  "author": "Diwakar Pratap",
   "build": {
     "appId": "com.aiteleprompter.app",
     "productName": "AI Teleprompter",
@@ -55,10 +56,12 @@
         "portable",
         "dir"
       ],
-      "signAndEditExecutable": false
+      "legalTrademarks": "Diwakar Pratap",
+      "requestedExecutionLevel": "asInvoker"
     },
     "portable": {
-      "artifactName": "AI-Teleprompter-${version}-Portable.exe"
+      "artifactName": "AI-Teleprompter-${version}-Portable.exe",
+      "requestExecutionLevel": "user"
     }
   },
   "dependencies": {
