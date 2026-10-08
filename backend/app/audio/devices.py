@@ -4,7 +4,12 @@ Discovers available microphones and WASAPI loopback output devices.
 """
 
 from typing import List, Optional
-import sounddevice as sd
+
+try:
+    import sounddevice as sd
+except (ImportError, OSError):
+    sd = None
+
 from app.audio.types import AudioDevice
 from app.logging.logger import get_logger
 
@@ -18,6 +23,10 @@ class AudioDeviceManager:
     def get_devices() -> List[AudioDevice]:
         """List all discovered audio devices across host APIs."""
         devices: List[AudioDevice] = []
+        if sd is None:
+            logger.debug("sounddevice/PortAudio library is not available in this environment")
+            return devices
+
         try:
             device_list = sd.query_devices()
             host_apis = sd.query_hostapis()
