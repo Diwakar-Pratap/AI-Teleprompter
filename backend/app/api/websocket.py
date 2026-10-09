@@ -92,17 +92,50 @@ manager = ConnectionManager()
 chat_engine = ChatEngine()
 
 
+# Deduplication & debouncing state for AI co-pilot prompts
+_last_ai_prompt: str = ""
+_last_ai_time: float = 0.0
+_ai_lock = asyncio.Lock()
+
+
 async def handle_speech_final(speaker: str, text: str) -> None:
     """
     Handle final transcribed speech segment from microphone or system speaker.
     Whenever a gap in speech occurs, automatically stream an AI co-pilot response.
+    Deduplicates across both microphone and system streams to prevent duplicate executions.
     """
+    global _last_ai_prompt, _last_ai_time
+
     if not audio_manager.is_capturing:
         return
 
     clean_text = text.strip()
-    if not clean_text or len(clean_text) < 2:
+    if not clean_text or len(clean_text) < 3:
         return
+
+    # In dual-stream mode (BOTH), only the INTERVIEWER asking a question triggers AI co-pilot answers.
+    # The interviewee (local user) answering does not trigger an AI answer to their own voice.
+    if speaker == "interviewee" and audio_manager.current_source == AudioSourceType.BOTH:
+        logger.debug("Skipping AI generation for local interviewee speech in dual mode", text=clean_text)
+        return
+
+    # Normalize text for deduplication (strip punctuation, whitespace, lowercase)
+    import re
+    norm_text = re.sub(r"[^\w\s]", "", clean_text).lower().strip()
+    now_ts = time.time()
+
+    # Deduplicate: if the same prompt arrived within 4.0 seconds (e.g. mic acoustic bleed or re-segmentation), skip
+    if norm_text == _last_ai_prompt and (now_ts - _last_ai_time) < 4.0:
+        logger.info("Ignoring duplicate speech AI prompt", prompt=clean_text, speaker=speaker)
+        return
+
+    # Debounce rapid triggers within 1.0 second
+    if (now_ts - _last_ai_time) < 1.0:
+        logger.info("Debouncing rapid speech prompt", prompt=clean_text, speaker=speaker)
+        return
+
+    _last_ai_prompt = norm_text
+    _last_ai_time = now_ts
 
     q_id = f"speech_{uuid.uuid4().hex[:8]}"
     logger.info(
@@ -184,12 +217,13 @@ async def handle_speech_final(speaker: str, text: str) -> None:
     full_answer = ""
     start_time = datetime.now(timezone.utc)
     try:
-        async for token in chat_engine.stream_response(prompt=clean_text):
-            full_answer += token
-            await manager.broadcast_event(
-                "ai.token",
-                {"question_id": q_id, "token": token},
-            )
+        async with _ai_lock:
+            async for token in chat_engine.stream_response(prompt=clean_text):
+                full_answer += token
+                await manager.broadcast_event(
+                    "ai.token",
+                    {"question_id": q_id, "token": token},
+                )
     except Exception as e:
         logger.error("Error during AI response streaming", error=str(e))
         full_answer = f"Error generating answer: {str(e)}"

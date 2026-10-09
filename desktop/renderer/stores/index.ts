@@ -192,10 +192,21 @@ export const useChatStore = create<ChatStore>((set) => ({
   ],
   streamingMessageId: null,
   addMessage: (message) =>
-    set((state) => ({
-      messages: [...state.messages, message],
-      streamingMessageId: message.isStreaming ? message.id : state.streamingMessageId,
-    })),
+    set((state) => {
+      // Ignore if identical message id already exists
+      if (state.messages.some((m) => m.id === message.id)) {
+        return state;
+      }
+      // Ignore if exact same text and role was added as the immediate previous message
+      const lastMsg = state.messages[state.messages.length - 1];
+      if (lastMsg && lastMsg.role === message.role && lastMsg.text.trim() === message.text.trim() && message.text.trim().length > 0) {
+        return state;
+      }
+      return {
+        messages: [...state.messages, message],
+        streamingMessageId: message.isStreaming ? message.id : state.streamingMessageId,
+      };
+    }),
   appendChatToken: (messageId, token) =>
     set((state) => {
       const exists = state.messages.some((m) => m.id === messageId);

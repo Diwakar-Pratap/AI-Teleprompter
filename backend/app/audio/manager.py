@@ -58,6 +58,10 @@ class AudioManager:
         }
         self._last_partial_time: Dict[str, float] = {"interviewer": 0.0, "interviewee": 0.0}
         self._partial_busy: Dict[str, bool] = {"interviewer": False, "interviewee": False}
+        self._last_transcribed_text: Dict[str, tuple[str, float]] = {
+            "interviewer": ("", 0.0),
+            "interviewee": ("", 0.0),
+        }
 
         self.target_sample_rate = target_sample_rate
         self.chunk_duration_ms = chunk_duration_ms
@@ -216,6 +220,13 @@ class AudioManager:
             if not text:
                 return
 
+            # Check if this exact text was dispatched within the last 2.5 seconds
+            last_text, last_ts = self._last_transcribed_text.get(speaker, ("", 0.0))
+            if text == last_text and (time.time() - last_ts) < 2.5:
+                logger.debug("Skipping duplicate speech transcription event", speaker=speaker, text=text)
+                return
+
+            self._last_transcribed_text[speaker] = (text, time.time())
             logger.info("Transcribed speech segment", speaker=speaker, text=text)
 
             # Broadcast speech.final event
