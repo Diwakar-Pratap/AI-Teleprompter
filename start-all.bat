@@ -33,15 +33,24 @@ if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
 
 :: 3. Start Backend Server on 0.0.0.0:8765
 echo [*] Starting AI Teleprompter Backend on port 8765...
-start "AI Teleprompter Backend" /min "!PYTHON_EXE!" "%~dp0backend\main.py" --host 0.0.0.0 --port 8765
+start "AI Teleprompter Backend" "!PYTHON_EXE!" "%~dp0backend\main.py" --host 0.0.0.0 --port 8765
 
-:: 4. Start ngrok tunnel if available
-where ngrok >nul 2>&1
-if !errorlevel! equ 0 (
-    echo [*] Starting ngrok Cloud Tunnel (https://salvaging-quiver-preheated.ngrok-free.dev)...
-    start "ngrok Tunnel" /min ngrok http 8765 --url salvaging-quiver-preheated.ngrok-free.dev
+:: 4. Start ngrok tunnel (visible terminal)
+set "NGROK_EXE="
+if exist "%LOCALAPPDATA%\Programs\Python\Python311\Scripts\ngrok.exe" (
+    set "NGROK_EXE=%LOCALAPPDATA%\Programs\Python\Python311\Scripts\ngrok.exe"
 ) else (
-    echo [i] ngrok CLI not in PATH. Remote public tunneling skipped.
+    where ngrok >nul 2>&1
+    if !errorlevel! equ 0 (
+        set "NGROK_EXE=ngrok"
+    )
+)
+
+if defined NGROK_EXE (
+    echo [*] Launching visible ngrok Cloud Tunnel window...
+    start "ngrok Tunnel (salvaging-quiver-preheated.ngrok-free.dev)" "!NGROK_EXE!" http 8765 --url salvaging-quiver-preheated.ngrok-free.dev
+) else (
+    echo [i] ngrok CLI not found. Remote public tunneling skipped.
 )
 
 :: 5. Wait for backend to be ready
