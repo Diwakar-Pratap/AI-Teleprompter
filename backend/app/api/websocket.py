@@ -99,18 +99,25 @@ chat_engine = ChatEngine()
 # Deduplication & debouncing state for AI co-pilot prompts
 _last_ai_prompt: str = ""
 _last_ai_time: float = 0.0
+_speech_epoch: int = 0
+_current_ai_task: Optional[asyncio.Task] = None
 _ai_lock = asyncio.Lock()
 _current_abort_event = asyncio.Event()
 is_listening_active: bool = True
 
 
-async def handle_speech_final(speaker: str, text: str) -> None:
+async def handle_speech_final(speaker: str, text: str, epoch: Optional[int] = None) -> None:
     """
     Handle final transcribed speech segment from microphone or system speaker.
     Whenever a gap in speech occurs, automatically stream an AI co-pilot response.
     Deduplicates across both microphone and system streams to prevent duplicate executions.
     """
-    global _last_ai_prompt, _last_ai_time, is_listening_active
+    global _last_ai_prompt, _last_ai_time, _speech_epoch, is_listening_active
+
+    # Check if this speech segment belongs to an obsolete epoch (e.g. before user pressed Stop)
+    if epoch is not None and epoch != _speech_epoch:
+        logger.info("Discarding stale speech transcription from previous epoch", text=text, epoch=epoch, current_epoch=_speech_epoch)
+        return
 
     if not is_listening_active and not audio_manager.is_capturing:
         return
@@ -238,6 +245,9 @@ async def handle_speech_final(speaker: str, text: str) -> None:
                     "ai.token",
                     {"question_id": q_id, "token": token},
                 )
+    except asyncio.CancelledError:
+        logger.info("AI speech streaming cancelled cleanly", question_id=q_id)
+        return
     except Exception as e:
         logger.error("Error during AI response streaming", error=str(e))
         full_answer = f"Error generating answer: {str(e)}"
@@ -411,7 +421,10 @@ async def handle_command(
                     "confidence": payload.get("confidence", 0.95),
                 },
             )
-            await handle_speech_final(speaker, text)
+            global _current_ai_task
+            if _current_ai_task and not _current_ai_task.done():
+                _current_ai_task.cancel()
+            _current_ai_task = asyncio.create_task(handle_speech_final(speaker, text, _speech_epoch))
 
     elif command_type == "command.speech_partial":
         text = (payload.get("text") or "").strip()
@@ -458,7 +471,9 @@ async def handle_command(
                             "confidence": 0.95,
                         },
                     )
-                    await handle_speech_final(speaker, chunk_text)
+                    if _current_ai_task and not _current_ai_task.done():
+                        _current_ai_task.cancel()
+                    _current_ai_task = asyncio.create_task(handle_speech_final(speaker, chunk_text, _speech_epoch))
             except Exception as e:
                 logger.error("Error processing client audio chunk", error=str(e))
 
@@ -555,8 +570,13 @@ async def handle_command(
 
     elif command_type in ("command.cancel", "command.stop_and_reset"):
         logger.info("Stop / Interrupt requested — halting AI generation and purging previous speech audio")
-        global _last_ai_prompt, _last_ai_time
+        global _last_ai_prompt, _last_ai_time, _speech_epoch, _current_ai_task
+        _speech_epoch += 1
         _current_abort_event.set()
+
+        if _current_ai_task and not _current_ai_task.done():
+            _current_ai_task.cancel()
+            _current_ai_task = None
 
         # Flush backend audio frames and buffers so previous talk is dropped
         audio_manager.speech_frames["interviewer"] = []
@@ -585,6 +605,8 @@ async def handle_command(
 
         # Keep listening active for new incoming chats and talks
         is_listening_active = True
+        # Immediately clear the abort event so next question can run fresh without being aborted!
+        _current_abort_event.clear()
         await manager.broadcast_event(
             "session.state_changed",
             {"previous": "GENERATING", "current": "LISTENING"},

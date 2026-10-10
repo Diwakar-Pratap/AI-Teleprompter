@@ -197,11 +197,20 @@ export const useChatStore = create<ChatStore>((set) => ({
       if (state.messages.some((m) => m.id === message.id)) {
         return state;
       }
-      // Ignore if exact same text and role was added as the immediate previous message
-      const lastMsg = state.messages[state.messages.length - 1];
-      if (lastMsg && lastMsg.role === message.role && lastMsg.text.trim() === message.text.trim() && message.text.trim().length > 0) {
-        return state;
+
+      // Ignore duplicate speech prompts across roles (e.g. mic bleeding into both interviewee and interviewer)
+      if (message.role !== "assistant" && message.text.trim().length > 2) {
+        const norm = message.text.trim().toLowerCase().replace(/[^\w\s]/g, "");
+        const recentDup = state.messages.slice(-4).some((m) => {
+          if (m.role === "assistant") return false;
+          const mNorm = m.text.trim().toLowerCase().replace(/[^\w\s]/g, "");
+          return mNorm.length > 2 && (mNorm === norm || mNorm.includes(norm) || norm.includes(mNorm));
+        });
+        if (recentDup) {
+          return state;
+        }
       }
+
       return {
         messages: [...state.messages, message],
         streamingMessageId: message.isStreaming ? message.id : state.streamingMessageId,

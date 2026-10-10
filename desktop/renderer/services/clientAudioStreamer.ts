@@ -10,7 +10,6 @@
  */
 
 import { useAudioStore, useTranscriptStore, useLicenseStore } from "../stores";
-import type { SpeakerRole } from "../types";
 
 export type SendCommandFn = (type: string, payload?: Record<string, unknown>) => void;
 
@@ -137,17 +136,30 @@ class ClientAudioStreamer {
     useAudioStore.getState().setVadState("interviewer", "SILENCE");
     useTranscriptStore.getState().setPartialText("");
 
-    // 2. Restart speech recognition instance to purge any buffered sentences
-    if (this.recognition && this.isStreaming) {
+    // 2. Completely destroy speech recognition instance to purge any buffered sentences
+    if (this.recognition) {
       try {
+        this.recognition.onstart = null;
+        this.recognition.onresult = null;
+        this.recognition.onerror = null;
+        this.recognition.onend = null;
         this.recognition.abort();
       } catch (e) {}
+      this.recognition = null;
+      this.isRecognitionRunning = false;
     }
 
     // 3. Send command to backend
     if (this.sendCommand) {
       this.sendCommand("command.stop_and_reset");
     }
+
+    // 4. Restart fresh SpeechRecognition instance cleanly after 120ms
+    setTimeout(() => {
+      if (this.isStreaming) {
+        this.initSpeechRecognition();
+      }
+    }, 120);
   }
 
   /**
@@ -195,7 +207,7 @@ class ClientAudioStreamer {
                 this.lastFinalTime = now;
                 console.log("[ClientAudio] Speech final:", clean);
 
-                // Send to backend to trigger AI co-pilot response
+                // Send to backend to trigger AI co-pilot response and broadcast speech.final
                 if (this.sendCommand) {
                   this.sendCommand("command.speech_input", {
                     text: clean,
@@ -203,14 +215,6 @@ class ClientAudioStreamer {
                   });
                 }
 
-                // Update local UI transcript immediately
-                useTranscriptStore.getState().addSegment({
-                  id: `client_speech_${now}`,
-                  speaker: "interviewer" as SpeakerRole,
-                  text: clean,
-                  isFinal: true,
-                  timestamp: new Date().toISOString(),
-                });
                 useTranscriptStore.getState().setPartialText("");
               }
             }
@@ -365,9 +369,17 @@ class ClientAudioStreamer {
 
   /**
    * Concatenates captured float32 audio frames, converts to PCM16, and sends to backend.
+   * Only used if browser SpeechRecognition is unavailable or failing.
    */
   private flushSpeechBuffer() {
     if (this.speechFramesBuffer.length === 0) return;
+
+    // If SpeechRecognition is running, it already handles real-time transcription directly.
+    // Do NOT stream audio chunks to avoid duplicate server transcription.
+    if (this.isRecognitionRunning || this.recognition) {
+      this.speechFramesBuffer = [];
+      return;
+    }
 
     try {
       const totalSamples = this.speechFramesBuffer.reduce((acc, f) => acc + f.length, 0);

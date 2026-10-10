@@ -24,6 +24,11 @@ try:
 except ImportError:
     fitz = None
 
+try:
+    import chromadb
+except ImportError:
+    chromadb = None
+
 from app.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -33,13 +38,26 @@ KNOWLEDGE_DB_PATH = DB_DIR / "knowledge.db"
 
 
 class KnowledgeStore:
-    """Fast local SQLite FTS5 knowledge store for resume, notes, and PDF context."""
+    """Fast local ChromaDB vector + SQLite FTS5 knowledge store for resume, notes, and PDF context."""
 
     _instance: Optional["KnowledgeStore"] = None
 
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = db_path or KNOWLEDGE_DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.chroma_client = None
+        self.chroma_collection = None
+        if chromadb is not None:
+            try:
+                chroma_path = str(DB_DIR / "chroma")
+                self.chroma_client = chromadb.PersistentClient(path=chroma_path)
+                self.chroma_collection = self.chroma_client.get_or_create_collection(
+                    name="teleprompter_knowledge",
+                    metadata={"hnsw:space": "cosine"},
+                )
+                logger.info("ChromaDB vector store connected", path=chroma_path)
+            except Exception as e:
+                logger.warning("ChromaDB initialization notice (falling back to SQLite FTS5)", error=str(e))
         self._init_db()
 
     @classmethod
@@ -116,6 +134,34 @@ class KnowledgeStore:
             )
             conn.commit()
 
+        # Index into ChromaDB vector store
+        if self.chroma_collection is not None:
+            try:
+                chunk_size = 400
+                overlap = 60
+                chunks = []
+                c_start = 0
+                while c_start < len(clean_content):
+                    chunk_text = clean_content[c_start : c_start + chunk_size]
+                    if chunk_text.strip():
+                        chunks.append(chunk_text.strip())
+                    c_start += (chunk_size - overlap)
+
+                if chunks:
+                    c_ids = [f"{doc_id}_c{i}" for i in range(len(chunks))]
+                    metadatas = [
+                        {"doc_id": doc_id, "title": clean_title, "doc_type": doc_type, "chunk_index": i}
+                        for i in range(len(chunks))
+                    ]
+                    self.chroma_collection.add(
+                        ids=c_ids,
+                        documents=chunks,
+                        metadatas=metadatas,
+                    )
+                    logger.info("Indexed document chunks in ChromaDB", doc_id=doc_id, chunks_count=len(chunks))
+            except Exception as e:
+                logger.warning("Failed to index chunks in ChromaDB (SQLite FTS5 will serve queries)", error=str(e))
+
         logger.info("Added document to knowledge base", doc_id=doc_id, title=clean_title, words=words)
         return {
             "id": doc_id,
@@ -173,7 +219,7 @@ class KnowledgeStore:
             return dict(row) if row else None
 
     def delete_document(self, doc_id: str) -> bool:
-        """Delete document from database and FTS5 index."""
+        """Delete document from database and FTS5 index, plus ChromaDB vector store."""
         with self._get_connection() as conn:
             cur = conn.cursor()
             cur.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
@@ -182,16 +228,58 @@ class KnowledgeStore:
             deleted = cur.rowcount > 0
             if deleted:
                 logger.info("Deleted document from knowledge base", doc_id=doc_id)
-            return deleted
+
+        if self.chroma_collection is not None:
+            try:
+                self.chroma_collection.delete(where={"doc_id": doc_id})
+                logger.info("Deleted document chunks from ChromaDB", doc_id=doc_id)
+            except Exception as e:
+                logger.warning("ChromaDB chunk deletion notice", error=str(e))
+
+        return deleted
 
     def search(self, query: str, limit: int = 4) -> List[Dict[str, Any]]:
         """
-        Fast full-text search using SQLite FTS5 BM25 relevance ranking.
-        Falls back to token LIKE search if query contains special syntax.
+        Fast hybrid search: Performs semantic vector retrieval via ChromaDB,
+        falling back to SQLite FTS5 BM25 relevance ranking.
         """
         clean_q = query.strip()
         if not clean_q:
             return []
+
+        # 1. Try semantic vector search via ChromaDB
+        if self.chroma_collection is not None:
+            try:
+                query_res = self.chroma_collection.query(
+                    query_texts=[clean_q],
+                    n_results=min(limit, 8),
+                )
+                chroma_results = []
+                if query_res and query_res.get("documents") and query_res["documents"][0]:
+                    docs = query_res["documents"][0]
+                    metas = query_res.get("metadatas", [[]])[0]
+                    distances = query_res.get("distances", [[]])[0] if query_res.get("distances") else []
+                    ids = query_res.get("ids", [[]])[0]
+
+                    for idx, doc_text in enumerate(docs):
+                        meta = metas[idx] if idx < len(metas) else {}
+                        dist = distances[idx] if idx < len(distances) else 0.0
+                        chroma_results.append({
+                            "id": meta.get("doc_id", ids[idx]),
+                            "title": meta.get("title", "Document"),
+                            "doc_type": meta.get("doc_type", "note"),
+                            "source_filename": meta.get("source_filename"),
+                            "snippet": doc_text[:300] + ("..." if len(doc_text) > 300 else ""),
+                            "content_chunk": doc_text,
+                            "score": float(dist),
+                            "engine": "chromadb",
+                        })
+                if chroma_results:
+                    return chroma_results[:limit]
+            except Exception as e:
+                logger.warning("ChromaDB vector query failed, falling back to SQLite FTS5", error=str(e))
+
+        # 2. SQLite FTS5 BM25 relevance search fallback
 
         # Sanitize query words for FTS5 (keep alphanumeric only)
         tokens = re.findall(r"\w+", clean_q)

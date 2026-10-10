@@ -57,6 +57,16 @@ export const Overlay: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Track window width for responsive header collapsing
+  const [windowWidth, setWindowWidth] = useState<number>(window.innerWidth || 460);
+  const [isMoreMenuOpen, setMoreMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleWinResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handleWinResize);
+    return () => window.removeEventListener("resize", handleWinResize);
+  }, []);
+
   // Auto-scroll chat to latest message or live transcription
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -392,273 +402,541 @@ export const Overlay: React.FC = () => {
         </div>
 
         {/* Action Controls */}
-        <div className="no-drag" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {/* Listening button */}
-          <button
-            onClick={handleToggleListening}
-            style={{
-              padding: "2px 8px",
-              height: "24px",
-              borderRadius: "4px",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              background: isListening ? "rgba(239, 68, 68, 0.18)" : "rgba(255, 255, 255, 0.05)",
-              border: isListening ? "1px solid rgba(239, 68, 68, 0.45)" : "1px solid rgba(255, 255, 255, 0.1)",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-            }}
-            title={isListening ? "Listening is active (Click to Stop Listening)" : "Listening is paused (Click to Start Listening)"}
-          >
-            <span
-              style={{
-                width: "7px",
-                height: "7px",
-                borderRadius: "50%",
-                backgroundColor: isListening ? "#ef4444" : "rgba(136, 146, 164, 0.5)",
-                boxShadow: isListening ? "0 0 8px #ef4444" : "none",
-                display: "inline-block",
-              }}
-            />
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 600,
-                color: isListening ? "#fca5a5" : "rgba(136, 146, 164, 0.8)",
-              }}
-            >
-              {isListening ? "Listening" : "Paused"}
-            </span>
-          </button>
+        <div className="no-drag" style={{ display: "flex", alignItems: "center", gap: "6px", position: "relative" }}>
+          {windowWidth < 460 ? (
+            /* Compact Header for Small Windows */
+            <>
+              {/* Stop AI button */}
+              <button
+                onClick={handleStopAndReset}
+                style={{
+                  padding: "2px 7px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: streamingMessageId ? "rgba(239, 68, 68, 0.35)" : "rgba(239, 68, 68, 0.15)",
+                  border: streamingMessageId ? "1px solid rgba(239, 68, 68, 0.75)" : "1px solid rgba(239, 68, 68, 0.3)",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  boxShadow: streamingMessageId ? "0 0 8px rgba(239, 68, 68, 0.5)" : "none",
+                }}
+                title="Stop previous AI answer & listen fresh"
+              >
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "1px",
+                    backgroundColor: "#ef4444",
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "#fca5a5" }}>
+                  Stop AI
+                </span>
+              </button>
 
-          {/* Stop / Interrupt button */}
-          <button
-            onClick={handleStopAndReset}
-            style={{
-              padding: "2px 8px",
-              height: "24px",
-              borderRadius: "4px",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-              background: streamingMessageId
-                ? "rgba(239, 68, 68, 0.35)"
-                : "rgba(239, 68, 68, 0.12)",
-              border: streamingMessageId
-                ? "1px solid rgba(239, 68, 68, 0.75)"
-                : "1px solid rgba(239, 68, 68, 0.3)",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              boxShadow: streamingMessageId ? "0 0 8px rgba(239, 68, 68, 0.5)" : "none",
-            }}
-            title="Stop previous AI answer, drop listened speech, and listen fresh for new talk"
-          >
-            <span
-              style={{
-                width: "7px",
-                height: "7px",
-                borderRadius: "1px",
-                backgroundColor: "#ef4444",
-                display: "inline-block",
-              }}
-            />
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 600,
-                color: "#fca5a5",
-              }}
-            >
-              Stop AI
-            </span>
-          </button>
+              {/* More Options Dropdown Toggle Button */}
+              <button
+                onClick={() => setMoreMenuOpen((prev) => !prev)}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: isMoreMenuOpen ? "rgba(255, 255, 255, 0.12)" : "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: isMoreMenuOpen ? "#ffffff" : "rgba(136, 146, 164, 0.8)",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                }}
+                title="More Options (Settings, Clear, Resize, etc.)"
+              >
+                ⋮
+              </button>
 
-          {/* Clear button */}
-          <button
-            onClick={handleClear}
-            style={{
-              width: "24px",
-              height: "24px",
-              borderRadius: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              color: "rgba(136, 146, 164, 0.6)",
-            }}
-            title="Clear chat and speech history"
-          >
-            <svg style={{ width: "13px", height: "13px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
+              {/* More Options Dropdown Popover */}
+              {isMoreMenuOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "32px",
+                    right: "28px",
+                    backgroundColor: "rgba(18, 22, 34, 0.98)",
+                    border: "1px solid rgba(255, 255, 255, 0.18)",
+                    borderRadius: "8px",
+                    padding: "6px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                    zIndex: 150,
+                    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.85)",
+                    minWidth: "160px",
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      setSettingsOpen(true);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 8px",
+                      borderRadius: "4px",
+                      border: "none",
+                      background: "transparent",
+                      color: "#e6edf3",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span>⚙️</span> Settings & Models
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      handleToggleListening();
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 8px",
+                      borderRadius: "4px",
+                      border: "none",
+                      background: "transparent",
+                      color: "#e6edf3",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span>🎙️</span> {isListening ? "Pause Listening" : "Start Listening"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      handleClear();
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 8px",
+                      borderRadius: "4px",
+                      border: "none",
+                      background: "transparent",
+                      color: "#e6edf3",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span>🧹</span> Clear Chat History
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      handleCycleSize();
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 8px",
+                      borderRadius: "4px",
+                      border: "none",
+                      background: "transparent",
+                      color: "#e6edf3",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span>📐</span> Cycle Size ({sizePresets[presetIndex].label})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      setCommandPaletteOpen(true);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 8px",
+                      borderRadius: "4px",
+                      border: "none",
+                      background: "transparent",
+                      color: "#e6edf3",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span>⌨️</span> Command Palette
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      toggleClickThrough();
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 8px",
+                      borderRadius: "4px",
+                      border: "none",
+                      background: "transparent",
+                      color: "#e6edf3",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span>🖱️</span> Click-through Mode
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      window.electronAPI?.send("app:minimize");
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 8px",
+                      borderRadius: "4px",
+                      border: "none",
+                      background: "transparent",
+                      color: "#e6edf3",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span>➖</span> Minimize
+                  </button>
+                </div>
+              )}
 
-          {/* Settings button */}
-          <button
-            onClick={() => setSettingsOpen(true)}
-            style={{
-              width: "24px",
-              height: "24px",
-              borderRadius: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-            }}
-            title="Settings & Knowledge Base (⚙️)"
-          >
-            <span style={{ fontSize: "13px" }}>⚙️</span>
-          </button>
+              {/* Close button */}
+              <button
+                onClick={() => {
+                  if (window.electronAPI) {
+                    window.electronAPI.send("app:quit");
+                  } else {
+                    window.close();
+                  }
+                }}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "rgba(136, 146, 164, 0.7)",
+                  transition: "background 0.15s ease, color 0.15s ease",
+                }}
+                title="Close AI Teleprompter"
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "rgba(239, 68, 68, 0.85)";
+                  (e.currentTarget as HTMLElement).style.color = "#ffffff";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "transparent";
+                  (e.currentTarget as HTMLElement).style.color = "rgba(136, 146, 164, 0.7)";
+                }}
+              >
+                <svg style={{ width: "13px", height: "13px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </>
+          ) : (
+            /* Full Expanded Header for Wider Windows */
+            <>
+              {/* Listening button */}
+              <button
+                onClick={handleToggleListening}
+                style={{
+                  padding: "2px 8px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  background: isListening ? "rgba(239, 68, 68, 0.18)" : "rgba(255, 255, 255, 0.05)",
+                  border: isListening ? "1px solid rgba(239, 68, 68, 0.45)" : "1px solid rgba(255, 255, 255, 0.1)",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+                title={isListening ? "Listening is active (Click to Stop Listening)" : "Listening is paused (Click to Start Listening)"}
+              >
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "50%",
+                    backgroundColor: isListening ? "#ef4444" : "rgba(136, 146, 164, 0.5)",
+                    boxShadow: isListening ? "0 0 8px #ef4444" : "none",
+                    display: "inline-block",
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: isListening ? "#fca5a5" : "rgba(136, 146, 164, 0.8)",
+                  }}
+                >
+                  {isListening ? "Listening" : "Paused"}
+                </span>
+              </button>
 
-          {/* Resize Presets cycle button */}
-          <button
-            onClick={handleCycleSize}
-            style={{
-              width: "24px",
-              height: "24px",
-              borderRadius: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              color: "rgba(136, 146, 164, 0.75)",
-            }}
-            title={`Resize window: ${sizePresets[presetIndex].label} (${sizePresets[presetIndex].width}x${sizePresets[presetIndex].height}) — click to switch`}
-          >
-            <svg style={{ width: "13px", height: "13px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-            </svg>
-          </button>
+              {/* Stop / Interrupt button */}
+              <button
+                onClick={handleStopAndReset}
+                style={{
+                  padding: "2px 8px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: streamingMessageId
+                    ? "rgba(239, 68, 68, 0.35)"
+                    : "rgba(239, 68, 68, 0.12)",
+                  border: streamingMessageId
+                    ? "1px solid rgba(239, 68, 68, 0.75)"
+                    : "1px solid rgba(239, 68, 68, 0.3)",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  boxShadow: streamingMessageId ? "0 0 8px rgba(239, 68, 68, 0.5)" : "none",
+                }}
+                title="Stop previous AI answer, drop listened speech, and listen fresh for new talk"
+              >
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "1px",
+                    backgroundColor: "#ef4444",
+                    display: "inline-block",
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#fca5a5",
+                  }}
+                >
+                  Stop AI
+                </span>
+              </button>
 
-          {/* Command palette */}
-          <button
-            onClick={() => setCommandPaletteOpen(true)}
-            style={{
-              width: "24px",
-              height: "24px",
-              borderRadius: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-            }}
-            title="Command palette (Ctrl+Shift+P)"
-          >
-            <svg
-              style={{ width: "14px", height: "14px", color: "rgba(136, 146, 164, 0.8)" }}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-            </svg>
-          </button>
+              {/* Clear button */}
+              <button
+                onClick={handleClear}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "rgba(136, 146, 164, 0.6)",
+                }}
+                title="Clear chat and speech history"
+              >
+                <svg style={{ width: "13px", height: "13px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
 
-          {/* Click-through toggle */}
-          <button
-            onClick={toggleClickThrough}
-            style={{
-              width: "24px",
-              height: "24px",
-              borderRadius: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-            }}
-            title="Toggle click-through (Ctrl+Shift+M)"
-          >
-            <svg
-              style={{
-                width: "14px",
-                height: "14px",
-                color: isClickThrough ? "rgba(251, 191, 36, 0.9)" : "rgba(136, 146, 164, 0.6)",
-              }}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" />
-            </svg>
-          </button>
+              {/* Settings button */}
+              <button
+                onClick={() => setSettingsOpen(true)}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+                title="Settings & Knowledge Base (⚙️)"
+              >
+                <span style={{ fontSize: "13px" }}>⚙️</span>
+              </button>
 
-          {/* Minimize button */}
-          <button
-            onClick={() => window.electronAPI?.send("app:minimize")}
-            style={{
-              width: "24px",
-              height: "24px",
-              borderRadius: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              color: "rgba(136, 146, 164, 0.7)",
-              transition: "background 0.15s ease, color 0.15s ease",
-            }}
-            title="Minimize window"
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "rgba(255, 255, 255, 0.08)";
-              (e.currentTarget as HTMLElement).style.color = "#e6edf3";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "transparent";
-              (e.currentTarget as HTMLElement).style.color = "rgba(136, 146, 164, 0.7)";
-            }}
-          >
-            <svg style={{ width: "12px", height: "12px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 12H5" />
-            </svg>
-          </button>
+              {/* Resize Presets cycle button */}
+              <button
+                onClick={handleCycleSize}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "rgba(136, 146, 164, 0.75)",
+                }}
+                title={`Resize window: ${sizePresets[presetIndex].label} (${sizePresets[presetIndex].width}x${sizePresets[presetIndex].height}) — click to switch`}
+              >
+                <svg style={{ width: "13px", height: "13px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              </button>
 
-          {/* Close button */}
-          <button
-            onClick={() => {
-              if (window.electronAPI) {
-                window.electronAPI.send("app:quit");
-              } else {
-                window.close();
-              }
-            }}
-            style={{
-              width: "24px",
-              height: "24px",
-              borderRadius: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              color: "rgba(136, 146, 164, 0.7)",
-              transition: "background 0.15s ease, color 0.15s ease",
-            }}
-            title="Close AI Teleprompter"
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "rgba(239, 68, 68, 0.85)";
-              (e.currentTarget as HTMLElement).style.color = "#ffffff";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "transparent";
-              (e.currentTarget as HTMLElement).style.color = "rgba(136, 146, 164, 0.7)";
-            }}
-          >
-            <svg style={{ width: "13px", height: "13px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+              {/* Command palette */}
+              <button
+                onClick={() => setCommandPaletteOpen(true)}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+                title="Command palette (Ctrl+Shift+P)"
+              >
+                <svg
+                  style={{ width: "14px", height: "14px", color: "rgba(136, 146, 164, 0.8)" }}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                </svg>
+              </button>
+
+              {/* Click-through toggle */}
+              <button
+                onClick={toggleClickThrough}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+                title="Toggle click-through (Ctrl+Shift+M)"
+              >
+                <svg
+                  style={{
+                    width: "14px",
+                    height: "14px",
+                    color: isClickThrough ? "rgba(251, 191, 36, 0.9)" : "rgba(136, 146, 164, 0.6)",
+                  }}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" />
+                </svg>
+              </button>
+
+              {/* Minimize button */}
+              <button
+                onClick={() => window.electronAPI?.send("app:minimize")}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "rgba(136, 146, 164, 0.7)",
+                  transition: "background 0.15s ease, color 0.15s ease",
+                }}
+                title="Minimize window"
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "rgba(255, 255, 255, 0.08)";
+                  (e.currentTarget as HTMLElement).style.color = "#e6edf3";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "transparent";
+                  (e.currentTarget as HTMLElement).style.color = "rgba(136, 146, 164, 0.7)";
+                }}
+              >
+                <svg style={{ width: "12px", height: "12px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 12H5" />
+                </svg>
+              </button>
+
+              {/* Close button */}
+              <button
+                onClick={() => {
+                  if (window.electronAPI) {
+                    window.electronAPI.send("app:quit");
+                  } else {
+                    window.close();
+                  }
+                }}
+                style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "rgba(136, 146, 164, 0.7)",
+                  transition: "background 0.15s ease, color 0.15s ease",
+                }}
+                title="Close AI Teleprompter"
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "rgba(239, 68, 68, 0.85)";
+                  (e.currentTarget as HTMLElement).style.color = "#ffffff";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "transparent";
+                  (e.currentTarget as HTMLElement).style.color = "rgba(136, 146, 164, 0.7)";
+                }}
+              >
+                <svg style={{ width: "13px", height: "13px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -688,18 +966,23 @@ export const Overlay: React.FC = () => {
                 display: "flex",
                 flexDirection: "column",
                 gap: "4px",
-                padding: "8px 12px",
-                borderRadius: "8px",
-                backgroundColor: isInterviewer
-                  ? "rgba(16, 185, 129, 0.08)"
-                  : isUser
-                  ? "rgba(59, 130, 246, 0.08)"
-                  : "rgba(255, 255, 255, 0.03)",
-                border: isInterviewer
-                  ? "1px solid rgba(16, 185, 129, 0.2)"
-                  : isUser
-                  ? "1px solid rgba(59, 130, 246, 0.2)"
-                  : "1px solid rgba(255, 255, 255, 0.08)",
+                padding: "9px 12px",
+                alignSelf: isUser ? "flex-end" : "flex-start",
+                maxWidth: isUser ? "85%" : isAssistant ? "92%" : "88%",
+                borderRadius: isUser ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                backgroundColor: isUser
+                  ? "rgba(30, 58, 138, 0.45)"
+                  : isInterviewer
+                  ? "rgba(6, 78, 59, 0.4)"
+                  : "rgba(25, 30, 45, 0.85)",
+                border: isUser
+                  ? "1px solid rgba(96, 165, 250, 0.35)"
+                  : isInterviewer
+                  ? "1px solid rgba(52, 211, 153, 0.3)"
+                  : "1px solid rgba(139, 92, 246, 0.25)",
+                boxShadow: isUser
+                  ? "0 2px 8px rgba(30, 58, 138, 0.25)"
+                  : "0 2px 8px rgba(0, 0, 0, 0.3)",
                 fontSize: `${fontSize}px`,
                 color: "rgba(230, 237, 243, 0.95)",
               }}
@@ -766,7 +1049,9 @@ export const Overlay: React.FC = () => {
           <div
             style={{
               padding: "8px 12px",
-              borderRadius: "8px",
+              borderRadius: ((partialSpeaker as string) === "interviewee" || (partialSpeaker as string) === "user") ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+              alignSelf: ((partialSpeaker as string) === "interviewee" || (partialSpeaker as string) === "user") ? "flex-end" : "flex-start",
+              maxWidth: "85%",
               backgroundColor: "rgba(251, 191, 36, 0.08)",
               border: "1px dashed rgba(251, 191, 36, 0.4)",
               display: "flex",

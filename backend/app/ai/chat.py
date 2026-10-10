@@ -44,6 +44,31 @@ def _read_env_file_key(var_name: str) -> Optional[str]:
     return None
 
 
+PERSONA_PRESETS: Dict[str, str] = {
+    "natural_human": (
+        "TONE & STYLE: Speak naturally like an authentic, highly capable human professional in real conversation. "
+        "Avoid robotic clichés, unnecessary filler, or repetitive AI buzzwords. Sound warm, confident, thoughtful, and articulate."
+    ),
+    "concise": (
+        "TONE & STYLE: Be extremely brief, crisp, and direct to the point. Give short, punchy answers in bullet points or 2-3 sentences max."
+    ),
+    "interview_star": (
+        "TONE & STYLE: Structure responses using the STAR method (Situation, Task, Action, Result). "
+        "Keep each section impactful, concrete, and business-focused."
+    ),
+    "technical": (
+        "TONE & STYLE: Provide deep technical depth, engineering precision, architectural trade-offs, and exact code or system concepts."
+    ),
+}
+
+MULTI_QUESTION_INSTRUCTION = (
+    "\n\nMULTI-QUESTION RULE:\n"
+    "If the input contains multiple questions (e.g. 2 or 3 questions asked together or in succession), "
+    "you MUST answer EVERY question systematically. Clearly number each answer (e.g., '1. ...', '2. ...', '3. ...') "
+    "so that all questions are answered completely in a single unified response."
+)
+
+
 class ChatEngine:
     """Manages conversational dialogue, RAG knowledge retrieval, and streaming responses."""
 
@@ -101,9 +126,19 @@ class ChatEngine:
         except Exception as e:
             logger.warning("Knowledge search error during chat generation", error=str(e))
 
+        try:
+            from app.api.routes import _settings
+            active_persona = getattr(_settings.ai, "persona", None) or os.getenv("AI_PERSONA", "natural_human")
+        except Exception:
+            active_persona = os.getenv("AI_PERSONA", "natural_human")
+
+        persona_instruction = PERSONA_PRESETS.get(active_persona, f"TONE & STYLE: {active_persona}")
+
         base_sys_prompt = system_prompt or (
-            "You are AI Teleprompter Assistant — an intelligent, concise, and helpful desktop AI co-pilot. "
-            "Give direct, high-value, crisp answers suitable for quick reading. "
+            "You are AI Teleprompter Assistant — an intelligent, highly capable desktop AI co-pilot. "
+            f"{persona_instruction} "
+            f"{MULTI_QUESTION_INSTRUCTION} "
+            "Give direct, high-value, articulate answers suitable for quick reading. "
             "If personal knowledge base details or resume context are provided, use them accurately to answer from the user's perspective."
         )
 
@@ -130,12 +165,12 @@ class ChatEngine:
                     }
                     body = {
                         "model": "claude-3-5-sonnet-20241022",
-                        "max_tokens": 1024,
+                        "max_tokens": 2500,
                         "system": sys_prompt,
                         "messages": messages,
                         "stream": True,
                     }
-                    async with httpx.AsyncClient(timeout=30.0) as client:
+                    async with httpx.AsyncClient(timeout=60.0) as client:
                         async with client.stream(
                             "POST", "https://api.anthropic.com/v1/messages", headers=headers, json=body
                         ) as response:
@@ -169,9 +204,9 @@ class ChatEngine:
                         "model": "gpt-4o-mini",
                         "messages": oai_messages,
                         "stream": True,
-                        "max_tokens": 1024,
+                        "max_tokens": 2500,
                     }
-                    async with httpx.AsyncClient(timeout=30.0) as client:
+                    async with httpx.AsyncClient(timeout=60.0) as client:
                         async with client.stream(
                             "POST", "https://api.openai.com/v1/chat/completions", headers=headers, json=body
                         ) as response:
@@ -209,9 +244,9 @@ class ChatEngine:
                     body = {
                         "system_instruction": {"parts": [{"text": sys_prompt}]},
                         "contents": gemini_contents,
-                        "generationConfig": {"maxOutputTokens": 1024},
+                        "generationConfig": {"maxOutputTokens": 2500},
                     }
-                    async with httpx.AsyncClient(timeout=30.0) as client:
+                    async with httpx.AsyncClient(timeout=60.0) as client:
                         async with client.stream("POST", url, headers=headers, json=body) as response:
                             if response.status_code == 200:
                                 async for line in response.aiter_lines():
@@ -246,9 +281,9 @@ class ChatEngine:
                         "model": nvidia_model,
                         "messages": nv_messages,
                         "stream": True,
-                        "max_tokens": 1024,
+                        "max_tokens": 2500,
                     }
-                    async with httpx.AsyncClient(timeout=30.0) as client:
+                    async with httpx.AsyncClient(timeout=60.0) as client:
                         async with client.stream(
                             "POST", "https://integrate.api.nvidia.com/v1/chat/completions", headers=headers, json=body
                         ) as response:
@@ -288,9 +323,9 @@ class ChatEngine:
                         "model": hf_model,
                         "messages": hf_messages,
                         "stream": True,
-                        "max_tokens": 1024,
+                        "max_tokens": 2500,
                     }
-                    async with httpx.AsyncClient(timeout=45.0) as client:
+                    async with httpx.AsyncClient(timeout=60.0) as client:
                         async with client.stream(
                             "POST", "https://router.huggingface.co/v1/chat/completions", headers=headers, json=body
                         ) as response:

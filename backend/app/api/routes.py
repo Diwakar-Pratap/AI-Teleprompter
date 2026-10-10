@@ -111,7 +111,8 @@ class AISettings(BaseModel):
     provider: str = os.getenv("AI_PROVIDER", "nvidia")
     model: str = os.getenv("AI_MODEL", "meta/llama-3.2-11b-vision-instruct")
     temperature: float = 0.7
-    max_tokens: int = 500
+    max_tokens: int = 2500
+    persona: str = os.getenv("AI_PERSONA", "natural_human")
 
 
 class AppearanceSettings(BaseModel):
@@ -200,6 +201,7 @@ class SaveKeysRequest(BaseModel):
     provider: str
     api_key: Optional[str] = None
     model: Optional[str] = None
+    persona: Optional[str] = None
 
 
 def _persist_env_file_var(var_name: str, value: str) -> None:
@@ -303,6 +305,7 @@ async def get_api_keys_info():
     return {
         "active_provider": _settings.ai.provider,
         "active_model": _settings.ai.model,
+        "persona": getattr(_settings.ai, "persona", "natural_human"),
         "providers": {
             "claude": {"configured": bool(claude_key and not claude_key.startswith("your_")), "preview": mask(claude_key)},
             "openai": {"configured": bool(openai_key and not openai_key.startswith("your_")), "preview": mask(openai_key)},
@@ -325,6 +328,11 @@ async def save_api_keys(req: SaveKeysRequest):
         _settings.ai.model = req.model
         os.environ["AI_MODEL"] = req.model
         _persist_env_file_var("AI_MODEL", req.model)
+
+    if req.persona:
+        _settings.ai.persona = req.persona
+        os.environ["AI_PERSONA"] = req.persona
+        _persist_env_file_var("AI_PERSONA", req.persona)
 
     key = (req.api_key or "").strip()
     if key:
@@ -351,8 +359,8 @@ async def save_api_keys(req: SaveKeysRequest):
 
     os.environ["AI_PROVIDER"] = prov
     _persist_env_file_var("AI_PROVIDER", prov)
-    logger.info("Saved AI provider settings", provider=prov, model=_settings.ai.model)
-    return {"status": "saved", "provider": prov, "model": _settings.ai.model}
+    logger.info("Saved AI provider settings", provider=prov, model=_settings.ai.model, persona=_settings.ai.persona)
+    return {"status": "saved", "provider": prov, "model": _settings.ai.model, "persona": _settings.ai.persona}
 
 
 # ─── Knowledge Base (FTS5 + PDF / Text Details) ───────────────────────────────

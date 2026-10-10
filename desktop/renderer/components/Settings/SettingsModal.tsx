@@ -36,6 +36,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [provider, setProvider] = useState<string>("claude");
   const [apiKey, setApiKey] = useState<string>("");
   const [model, setModel] = useState<string>("claude-3-5-sonnet-20241022");
+  const [personaType, setPersonaType] = useState<string>("natural_human");
+  const [customPersonaText, setCustomPersonaText] = useState<string>("");
   const [testStatus, setTestStatus] = useState<{
     testing: boolean;
     success?: boolean;
@@ -75,6 +77,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         }
         if (data.active_model) {
           setModel(data.active_model);
+        }
+        if (data.persona) {
+          if (["natural_human", "concise", "interview_star", "technical"].includes(data.persona)) {
+            setPersonaType(data.persona);
+          } else {
+            setPersonaType("custom");
+            setCustomPersonaText(data.persona);
+          }
         }
         if (data.providers) {
           setConfiguredProviders(data.providers);
@@ -155,6 +165,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const handleSaveApiSettings = async () => {
     setSaveStatus("Saving...");
     try {
+      const personaToSave = personaType === "custom" ? customPersonaText.trim() : personaType;
       const res = await fetch(`${effectiveBackendUrl}/api/v1/settings/api-keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,12 +173,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           provider,
           api_key: apiKey.trim() || undefined,
           model: model.trim() || undefined,
+          persona: personaToSave || "natural_human",
         }),
       });
 
       if (res.ok) {
         setSaveStatus("✓ Settings saved successfully!");
-        setTimeout(() => setSaveStatus(""), 3000);
+        fetchApiConfig();
+        setTimeout(() => setSaveStatus(""), 3500);
       } else {
         const errText = await res.text();
         setSaveStatus(`Failed to save (${res.status}): ${errText.slice(0, 100)}`);
@@ -410,6 +423,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
           {activeTab === "api" && (
             <>
+              {/* Active Engine & Model Banner */}
+              <div
+                style={{
+                  backgroundColor: "rgba(37, 99, 235, 0.12)",
+                  border: "1px solid rgba(59, 130, 246, 0.3)",
+                  borderRadius: "8px",
+                  padding: "10px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "3px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    CURRENTLY ACTIVE MODEL
+                  </span>
+                  <span style={{ fontSize: "10px", backgroundColor: "#10b981", color: "#ffffff", padding: "1px 6px", borderRadius: "10px", fontWeight: 600 }}>
+                    Active
+                  </span>
+                </div>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: "#ffffff" }}>
+                  {provider.toUpperCase()} — {model || "Default Model"}
+                </div>
+              </div>
+
               {/* Provider Selection */}
               <div>
                 <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "rgba(136, 146, 164, 0.8)", marginBottom: "4px" }}>
@@ -493,6 +531,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     outline: "none",
                   }}
                 />
+              </div>
+
+              {/* AI Persona & Voice Tone Input */}
+              <div>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "rgba(136, 146, 164, 0.8)", marginBottom: "4px" }}>
+                  AI PERSONA & SOUND (HOW ANSWERS SHOULD SOUND)
+                </label>
+                <select
+                  value={personaType}
+                  onChange={(e) => setPersonaType(e.target.value)}
+                  style={{
+                    width: "100%",
+                    backgroundColor: "rgba(0, 0, 0, 0.4)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    borderRadius: "6px",
+                    padding: "8px 10px",
+                    color: "rgba(230, 237, 243, 0.95)",
+                    fontSize: "12px",
+                    outline: "none",
+                    marginBottom: personaType === "custom" ? "8px" : "0",
+                  }}
+                >
+                  <option value="natural_human">🗣️ Like Human (Authentic, natural, articulate, warm)</option>
+                  <option value="concise">⚡ Short & Crisp (Direct bullet points, 2-3 sentences)</option>
+                  <option value="interview_star">💼 Interview STAR Method (Situation, Task, Action, Result)</option>
+                  <option value="technical">🛠️ Technical Deep-Dive (Architecture, trade-offs, code)</option>
+                  <option value="custom">✍️ Custom Instructions (Type your own preference)...</option>
+                </select>
+                {personaType === "custom" && (
+                  <textarea
+                    rows={2}
+                    value={customPersonaText}
+                    onChange={(e) => setCustomPersonaText(e.target.value)}
+                    placeholder="e.g. Sound like a senior tech lead: direct, pragmatic, concise, and human-like..."
+                    style={{
+                      width: "100%",
+                      backgroundColor: "rgba(0, 0, 0, 0.5)",
+                      border: "1px solid rgba(96, 165, 250, 0.4)",
+                      borderRadius: "6px",
+                      padding: "8px 10px",
+                      color: "rgba(230, 237, 243, 0.95)",
+                      fontSize: "12px",
+                      outline: "none",
+                      resize: "none",
+                    }}
+                  />
+                )}
               </div>
 
               {/* Actions: Test Connection & Save */}
