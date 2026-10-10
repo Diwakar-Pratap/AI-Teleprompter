@@ -264,10 +264,10 @@ async def handle_command(
     payload: dict[str, Any],
 ) -> None:
     """Handle incoming commands from the Electron frontend."""
+    global is_listening_active
     logger.debug("Command received", type=command_type, payload=payload)
 
     if command_type == "command.toggle_listening":
-        global is_listening_active
         if is_listening_active or audio_manager.is_capturing:
             is_listening_active = False
             await audio_manager.stop()
@@ -293,7 +293,6 @@ async def handle_command(
             )
 
     elif command_type == "command.start_listening":
-        global is_listening_active
         is_listening_active = True
         from app.ota.agent.license_client import ClientLicenseManager
         lic_mgr = ClientLicenseManager()
@@ -383,7 +382,6 @@ async def handle_command(
             logger.debug("License sync command error", error=str(e))
 
     elif command_type == "command.stop_listening":
-        global is_listening_active
         is_listening_active = False
         await audio_manager.stop()
         await manager.broadcast_event(
