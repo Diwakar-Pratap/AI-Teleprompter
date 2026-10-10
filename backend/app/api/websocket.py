@@ -283,7 +283,7 @@ async def handle_command(
     payload: dict[str, Any],
 ) -> None:
     """Handle incoming commands from the Electron frontend."""
-    global is_listening_active
+    global is_listening_active, _last_ai_prompt, _last_ai_time, _speech_epoch, _current_ai_task
     logger.debug("Command received", type=command_type, payload=payload)
 
     if command_type == "command.toggle_listening":
@@ -421,7 +421,6 @@ async def handle_command(
                     "confidence": payload.get("confidence", 0.95),
                 },
             )
-            global _current_ai_task
             if _current_ai_task and not _current_ai_task.done():
                 _current_ai_task.cancel()
             _current_ai_task = asyncio.create_task(handle_speech_final(speaker, text, _speech_epoch))
@@ -570,7 +569,6 @@ async def handle_command(
 
     elif command_type in ("command.cancel", "command.stop_and_reset"):
         logger.info("Stop / Interrupt requested — halting AI generation and purging previous speech audio")
-        global _last_ai_prompt, _last_ai_time, _speech_epoch, _current_ai_task
         _speech_epoch += 1
         _current_abort_event.set()
 
