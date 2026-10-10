@@ -126,10 +126,9 @@ async def handle_speech_final(speaker: str, text: str, epoch: Optional[int] = No
     if not clean_text or len(clean_text) < 3:
         return
 
-    # In dual-stream mode (BOTH), only the INTERVIEWER asking a question triggers AI co-pilot answers.
-    # The interviewee (local user) answering does not trigger an AI answer to their own voice.
-    if speaker == "interviewee" and audio_manager.current_source == AudioSourceType.BOTH:
-        logger.debug("Skipping AI generation for local interviewee speech in dual mode", text=clean_text)
+    # If AI is already generating an answer, ignore incoming ambient speech so it doesn't interrupt or cancel
+    if _ai_lock.locked():
+        logger.info("AI is currently generating; ignoring speech segment", text=clean_text)
         return
 
     # Normalize text for deduplication (strip punctuation, whitespace, lowercase)
@@ -229,9 +228,9 @@ async def handle_speech_final(speaker: str, text: str, epoch: Optional[int] = No
     # 3. Stream AI answer tokens directly to the chat
     full_answer = ""
     start_time = datetime.now(timezone.utc)
-    _current_abort_event.clear()
     try:
         async with _ai_lock:
+            _current_abort_event.clear()
             async for token in chat_engine.stream_response(prompt=clean_text):
                 if _current_abort_event.is_set():
                     logger.info("AI speech streaming cancelled by user", question_id=q_id)
@@ -421,9 +420,10 @@ async def handle_command(
                     "confidence": payload.get("confidence", 0.95),
                 },
             )
-            if _current_ai_task and not _current_ai_task.done():
-                _current_ai_task.cancel()
-            _current_ai_task = asyncio.create_task(handle_speech_final(speaker, text, _speech_epoch))
+            if not _ai_lock.locked():
+                _current_ai_task = asyncio.create_task(handle_speech_final(speaker, text, _speech_epoch))
+            else:
+                logger.info("AI is currently generating; ignoring new speech input", text=text)
 
     elif command_type == "command.speech_partial":
         text = (payload.get("text") or "").strip()
@@ -470,9 +470,10 @@ async def handle_command(
                             "confidence": 0.95,
                         },
                     )
-                    if _current_ai_task and not _current_ai_task.done():
-                        _current_ai_task.cancel()
-                    _current_ai_task = asyncio.create_task(handle_speech_final(speaker, chunk_text, _speech_epoch))
+                    if not _ai_lock.locked():
+                        _current_ai_task = asyncio.create_task(handle_speech_final(speaker, chunk_text, _speech_epoch))
+                    else:
+                        logger.info("AI is currently generating; ignoring chunk text", text=chunk_text)
             except Exception as e:
                 logger.error("Error processing client audio chunk", error=str(e))
 
@@ -537,29 +538,42 @@ async def handle_command(
             logger.warning("License check exception in chat", error=str(lic_err))
 
         if prompt:
-            full_response = ""
-            _current_abort_event.clear()
-            async for token in chat_engine.stream_response(prompt=prompt, history=history):
-                if _current_abort_event.is_set():
-                    logger.info("Chat streaming cancelled by user", message_id=msg_id)
+            async def _stream_chat() -> None:
+                full_response = ""
+                try:
+                    async with _ai_lock:
+                        _current_abort_event.clear()
+                        async for token in chat_engine.stream_response(prompt=prompt, history=history):
+                            if _current_abort_event.is_set():
+                                logger.info("Chat streaming cancelled by user", message_id=msg_id)
+                                await manager.send_event(
+                                    websocket,
+                                    "ai.cancelled",
+                                    {"message_id": msg_id, "reason": "user_stopped"},
+                                )
+                                return
+                            full_response += token
+                            await manager.send_event(
+                                websocket,
+                                "chat.token",
+                                {"message_id": msg_id, "token": token},
+                            )
+                        await manager.send_event(
+                            websocket,
+                            "chat.completed",
+                            {"message_id": msg_id, "reply": full_response},
+                        )
+                except asyncio.CancelledError:
+                    logger.info("Chat task cancelled cleanly", message_id=msg_id)
+                except Exception as e:
+                    logger.error("Error in chat streaming", error=str(e))
                     await manager.send_event(
                         websocket,
-                        "ai.cancelled",
-                        {"message_id": msg_id, "reason": "user_stopped"},
+                        "chat.completed",
+                        {"message_id": msg_id, "reply": f"Error generating answer: {str(e)}"},
                     )
-                    return
-                full_response += token
-                await manager.send_event(
-                    websocket,
-                    "chat.token",
-                    {"message_id": msg_id, "token": token},
-                )
 
-            await manager.send_event(
-                websocket,
-                "chat.completed",
-                {"message_id": msg_id, "reply": full_response},
-            )
+            _current_ai_task = asyncio.create_task(_stream_chat())
         else:
             await manager.send_event(
                 websocket,
@@ -603,8 +617,6 @@ async def handle_command(
 
         # Keep listening active for new incoming chats and talks
         is_listening_active = True
-        # Immediately clear the abort event so next question can run fresh without being aborted!
-        _current_abort_event.clear()
         await manager.broadcast_event(
             "session.state_changed",
             {"previous": "GENERATING", "current": "LISTENING"},

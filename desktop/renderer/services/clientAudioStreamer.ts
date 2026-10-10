@@ -236,8 +236,9 @@ class ClientAudioStreamer {
 
       rec.onerror = (err: any) => {
         console.debug("[ClientAudio] Speech recognition notice:", err?.error);
-        if (err?.error === "not-allowed" || err?.error === "service-not-allowed") {
-          console.warn("[ClientAudio] Speech recognition permission denied or service unavailable");
+        if (err?.error === "not-allowed" || err?.error === "service-not-allowed" || err?.error === "network") {
+          console.warn("[ClientAudio] Speech recognition unavailable or error:", err?.error);
+          this.isRecognitionRunning = false;
         }
       };
 
@@ -374,9 +375,11 @@ class ClientAudioStreamer {
   private flushSpeechBuffer() {
     if (this.speechFramesBuffer.length === 0) return;
 
-    // If SpeechRecognition is running, it already handles real-time transcription directly.
-    // Do NOT stream audio chunks to avoid duplicate server transcription.
-    if (this.isRecognitionRunning || this.recognition) {
+    // If Web Speech API is actively running AND successfully yielding transcripts recently,
+    // avoid sending raw PCM frames to prevent duplicate transcription.
+    // Otherwise, stream PCM audio chunks to backend faster-whisper / STT engine.
+    const hasRecentWebSpeech = this.isRecognitionRunning && (Date.now() - this.lastFinalTime < 4000);
+    if (hasRecentWebSpeech) {
       this.speechFramesBuffer = [];
       return;
     }
