@@ -120,6 +120,37 @@ class ClientAudioStreamer {
   }
 
   /**
+   * Interrupt and reset: immediately drops previous speech buffers, stops any
+   * pending transcripts, clears VAD, purges Chromium speech queue, and sends
+   * command.stop_and_reset to backend so it immediately listens fresh for new talks.
+   */
+  public interruptAndReset() {
+    console.log("[ClientAudio] Interrupting previous audio data & resetting listener...");
+
+    // 1. Clear audio buffers and speech deduplication
+    this.speechFramesBuffer = [];
+    this.silenceFramesCount = 0;
+    this.isVadSpeaking = false;
+    this.lastFinalTranscript = "";
+    this.lastFinalTime = 0;
+
+    useAudioStore.getState().setVadState("interviewer", "SILENCE");
+    useTranscriptStore.getState().setPartialText("");
+
+    // 2. Restart speech recognition instance to purge any buffered sentences
+    if (this.recognition && this.isStreaming) {
+      try {
+        this.recognition.abort();
+      } catch (e) {}
+    }
+
+    // 3. Send command to backend
+    if (this.sendCommand) {
+      this.sendCommand("command.stop_and_reset");
+    }
+  }
+
+  /**
    * Initializes Web Speech API (webkitSpeechRecognition) for zero-latency client-side speech-to-text.
    */
   private initSpeechRecognition() {

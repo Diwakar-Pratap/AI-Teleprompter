@@ -100,6 +100,7 @@ chat_engine = ChatEngine()
 _last_ai_prompt: str = ""
 _last_ai_time: float = 0.0
 _ai_lock = asyncio.Lock()
+_current_abort_event = asyncio.Event()
 is_listening_active: bool = True
 
 
@@ -221,9 +222,17 @@ async def handle_speech_final(speaker: str, text: str) -> None:
     # 3. Stream AI answer tokens directly to the chat
     full_answer = ""
     start_time = datetime.now(timezone.utc)
+    _current_abort_event.clear()
     try:
         async with _ai_lock:
             async for token in chat_engine.stream_response(prompt=clean_text):
+                if _current_abort_event.is_set():
+                    logger.info("AI speech streaming cancelled by user", question_id=q_id)
+                    await manager.broadcast_event(
+                        "ai.cancelled",
+                        {"question_id": q_id, "reason": "user_stopped"},
+                    )
+                    return
                 full_answer += token
                 await manager.broadcast_event(
                     "ai.token",
@@ -515,7 +524,16 @@ async def handle_command(
 
         if prompt:
             full_response = ""
+            _current_abort_event.clear()
             async for token in chat_engine.stream_response(prompt=prompt, history=history):
+                if _current_abort_event.is_set():
+                    logger.info("Chat streaming cancelled by user", message_id=msg_id)
+                    await manager.send_event(
+                        websocket,
+                        "ai.cancelled",
+                        {"message_id": msg_id, "reason": "user_stopped"},
+                    )
+                    return
                 full_response += token
                 await manager.send_event(
                     websocket,
@@ -535,11 +553,41 @@ async def handle_command(
                 {"message_id": msg_id, "reply": "Please provide a question or message."},
             )
 
-    elif command_type == "command.cancel":
-        await manager.send_event(
-            websocket,
+    elif command_type in ("command.cancel", "command.stop_and_reset"):
+        logger.info("Stop / Interrupt requested — halting AI generation and purging previous speech audio")
+        global _last_ai_prompt, _last_ai_time
+        _current_abort_event.set()
+
+        # Flush backend audio frames and buffers so previous talk is dropped
+        audio_manager.speech_frames["interviewer"] = []
+        audio_manager.speech_frames["interviewee"] = []
+        audio_manager.buffer.clear()
+        audio_manager.vad_interviewer.reset()
+        audio_manager.vad_interviewee.reset()
+        audio_manager._last_transcribed_text = {
+            "interviewer": ("", 0.0),
+            "interviewee": ("", 0.0),
+        }
+
+        # Clear prompt deduplication state
+        _last_ai_prompt = ""
+        _last_ai_time = 0.0
+
+        # Broadcast cancellation and clear interim transcripts
+        await manager.broadcast_event(
             "ai.cancelled",
-            {"reason": "user_action"},
+            {"reason": "user_stopped"},
+        )
+        await manager.broadcast_event(
+            "speech.partial",
+            {"speaker": "interviewer", "text": ""},
+        )
+
+        # Keep listening active for new incoming chats and talks
+        is_listening_active = True
+        await manager.broadcast_event(
+            "session.state_changed",
+            {"previous": "GENERATING", "current": "LISTENING"},
         )
 
     elif command_type == "command.regenerate":

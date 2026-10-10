@@ -247,9 +247,16 @@ export function useWebSocket() {
         break;
       }
 
-      case "ai.cancelled":
+      case "ai.cancelled": {
+        const streamId = useChatStore.getState().streamingMessageId;
+        if (streamId) {
+          useChatStore.getState().finalizeChatMessage(streamId, "(Stopped)");
+        }
         useAnswerStore.getState().clearAnswer();
+        useTranscriptStore.getState().setPartialText("");
+        useSessionStore.getState().setAppState("LISTENING");
         break;
+      }
 
       case "audio.started":
         useAudioStore.getState().setCapturing(true);

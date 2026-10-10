@@ -143,6 +143,29 @@ export const Overlay: React.FC = () => {
     }
   }, [isListening, sendCommand]);
 
+  const handleStopAndReset = useCallback(() => {
+    // 1. Immediately drop client-side audio frames, VAD, and speech recognition buffers
+    clientAudioStreamer.interruptAndReset();
+
+    // 2. Clear partial transcript and stop streaming assistant bubble
+    useTranscriptStore.getState().setPartialText("");
+    if (streamingMessageId) {
+      useChatStore.getState().finalizeChatMessage(streamingMessageId, "(Stopped)");
+    }
+    useAnswerStore.getState().clearAnswer();
+
+    // 3. Send command to backend to halt AI generation & clear backend speech buffers
+    sendCommand("command.stop_and_reset");
+
+    // 4. Ensure listening remains active for fresh incoming talks
+    if (!isListening) {
+      useSessionStore.getState().setListening(true);
+      useAudioStore.getState().setCapturing(true);
+      clientAudioStreamer.start(sendCommand);
+    }
+    setAppState("LISTENING");
+  }, [streamingMessageId, isListening, sendCommand, setAppState]);
+
   const handleSendChat = useCallback(() => {
     const trimmed = chatInput.trim();
     if (!trimmed || streamingMessageId) return;
@@ -405,6 +428,48 @@ export const Overlay: React.FC = () => {
               }}
             >
               {isListening ? "Listening" : "Paused"}
+            </span>
+          </button>
+
+          {/* Stop / Interrupt button */}
+          <button
+            onClick={handleStopAndReset}
+            style={{
+              padding: "2px 8px",
+              height: "24px",
+              borderRadius: "4px",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              background: streamingMessageId
+                ? "rgba(239, 68, 68, 0.35)"
+                : "rgba(239, 68, 68, 0.12)",
+              border: streamingMessageId
+                ? "1px solid rgba(239, 68, 68, 0.75)"
+                : "1px solid rgba(239, 68, 68, 0.3)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              boxShadow: streamingMessageId ? "0 0 8px rgba(239, 68, 68, 0.5)" : "none",
+            }}
+            title="Stop previous AI answer, drop listened speech, and listen fresh for new talk"
+          >
+            <span
+              style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "1px",
+                backgroundColor: "#ef4444",
+                display: "inline-block",
+              }}
+            />
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "#fca5a5",
+              }}
+            >
+              Stop AI
             </span>
           </button>
 
@@ -780,29 +845,53 @@ export const Overlay: React.FC = () => {
           }}
           disabled={Boolean(streamingMessageId) || isBlocked}
         />
-        <button
-          onClick={handleSendChat}
-          disabled={!chatInput.trim() || Boolean(streamingMessageId) || isBlocked}
-          style={{
-            padding: "8px 14px",
-            borderRadius: "6px",
-            border: "none",
-            backgroundColor:
-              chatInput.trim() && !streamingMessageId
-                ? "rgba(59, 130, 246, 0.9)"
-                : "rgba(255, 255, 255, 0.08)",
-            color:
-              chatInput.trim() && !streamingMessageId
-                ? "#ffffff"
-                : "rgba(136, 146, 164, 0.4)",
-            cursor: chatInput.trim() && !streamingMessageId ? "pointer" : "default",
-            fontSize: "11px",
-            fontWeight: 600,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {streamingMessageId ? "Thinking..." : "Ask AI"}
-        </button>
+        {streamingMessageId ? (
+          <button
+            onClick={handleStopAndReset}
+            style={{
+              padding: "8px 14px",
+              borderRadius: "6px",
+              border: "1px solid rgba(239, 68, 68, 0.8)",
+              backgroundColor: "rgba(239, 68, 68, 0.85)",
+              color: "#ffffff",
+              cursor: "pointer",
+              fontSize: "11px",
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              boxShadow: "0 0 10px rgba(239, 68, 68, 0.5)",
+            }}
+            title="Click to stop generating and listen fresh"
+          >
+            <span style={{ fontSize: "10px" }}>⏹️</span> Stop AI
+          </button>
+        ) : (
+          <button
+            onClick={handleSendChat}
+            disabled={!chatInput.trim() || isBlocked}
+            style={{
+              padding: "8px 14px",
+              borderRadius: "6px",
+              border: "none",
+              backgroundColor:
+                chatInput.trim() && !isBlocked
+                  ? "rgba(59, 130, 246, 0.9)"
+                  : "rgba(255, 255, 255, 0.08)",
+              color:
+                chatInput.trim() && !isBlocked
+                  ? "#ffffff"
+                  : "rgba(136, 146, 164, 0.4)",
+              cursor: chatInput.trim() && !isBlocked ? "pointer" : "default",
+              fontSize: "11px",
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Ask AI
+          </button>
+        )}
       </div>
 
       {/* Footer Branding & Author Credit */}
