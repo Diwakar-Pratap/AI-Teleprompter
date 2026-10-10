@@ -11,9 +11,6 @@ import {
 } from "../stores";
 import type { WebSocketEvent, Question, ContextSource, SpeakerRole, AppState } from "../types";
 
-const RECONNECT_DELAY_MS = 3000;
-const MAX_RECONNECT_ATTEMPTS = 10;
-
 function getSUTInfo() {
   let deviceId = "";
   try {
@@ -243,6 +240,7 @@ export function useWebSocket() {
         const qId = (payload["question_id"] as string) || "ai_stream";
         const answer = (payload["answer"] as string) ?? "";
         const sources = (payload["sources"] as ContextSource[]) ?? [];
+        const latencyMs = (payload["latency_ms"] as number) ?? 0;
         useChatStore.getState().finalizeChatMessage(qId, answer);
         useAnswerStore.getState().finalizeAnswer(answer, sources, latencyMs);
         useSessionStore.getState().setAppState("DISPLAYING");

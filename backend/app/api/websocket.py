@@ -7,8 +7,12 @@ Integrates AudioManager for dual-stream audio capture and ChatEngine for live AI
 import os
 import uuid
 import json
+import time
+import asyncio
+import base64
 from datetime import datetime, timezone
 from typing import Any, Optional
+import numpy as np
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.websockets import WebSocketState
@@ -16,6 +20,7 @@ from fastapi.websockets import WebSocketState
 from app.audio.manager import AudioManager
 from app.audio.types import AudioSourceType
 from app.ai.chat import ChatEngine
+from app.stt.transcriber import get_transcriber
 from app.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -91,11 +96,11 @@ manager = ConnectionManager()
 # Global ChatEngine instance
 chat_engine = ChatEngine()
 
-
 # Deduplication & debouncing state for AI co-pilot prompts
 _last_ai_prompt: str = ""
 _last_ai_time: float = 0.0
 _ai_lock = asyncio.Lock()
+is_listening_active: bool = True
 
 
 async def handle_speech_final(speaker: str, text: str) -> None:
@@ -104,9 +109,9 @@ async def handle_speech_final(speaker: str, text: str) -> None:
     Whenever a gap in speech occurs, automatically stream an AI co-pilot response.
     Deduplicates across both microphone and system streams to prevent duplicate executions.
     """
-    global _last_ai_prompt, _last_ai_time
+    global _last_ai_prompt, _last_ai_time, is_listening_active
 
-    if not audio_manager.is_capturing:
+    if not is_listening_active and not audio_manager.is_capturing:
         return
 
     clean_text = text.strip()
@@ -262,13 +267,16 @@ async def handle_command(
     logger.debug("Command received", type=command_type, payload=payload)
 
     if command_type == "command.toggle_listening":
-        if audio_manager.is_capturing:
+        global is_listening_active
+        if is_listening_active or audio_manager.is_capturing:
+            is_listening_active = False
             await audio_manager.stop()
             await manager.broadcast_event(
                 "session.state_changed",
                 {"previous": "LISTENING", "current": "IDLE"},
             )
         else:
+            is_listening_active = True
             source_str = payload.get("source", "both")
             if source_str == "microphone":
                 source = AudioSourceType.MICROPHONE
@@ -278,14 +286,15 @@ async def handle_command(
                 source = AudioSourceType.BOTH
 
             device_id = payload.get("device_id")
-            success = await audio_manager.start(source=source, device_id=device_id)
-            if success:
-                await manager.broadcast_event(
-                    "session.state_changed",
-                    {"previous": "IDLE", "current": "LISTENING"},
-                )
+            await audio_manager.start(source=source, device_id=device_id)
+            await manager.broadcast_event(
+                "session.state_changed",
+                {"previous": "IDLE", "current": "LISTENING"},
+            )
 
     elif command_type == "command.start_listening":
+        global is_listening_active
+        is_listening_active = True
         from app.ota.agent.license_client import ClientLicenseManager
         lic_mgr = ClientLicenseManager()
         if not lic_mgr.is_allowed():
@@ -313,12 +322,11 @@ async def handle_command(
             source = AudioSourceType.BOTH
 
         device_id = payload.get("device_id")
-        success = await audio_manager.start(source=source, device_id=device_id)
-        if success:
-            await manager.broadcast_event(
-                "session.state_changed",
-                {"previous": "IDLE", "current": "LISTENING"},
-            )
+        await audio_manager.start(source=source, device_id=device_id)
+        await manager.broadcast_event(
+            "session.state_changed",
+            {"previous": "IDLE", "current": "LISTENING"},
+        )
 
     elif command_type in ("command.device_handshake", "command.client_heartbeat"):
         try:
@@ -375,11 +383,77 @@ async def handle_command(
             logger.debug("License sync command error", error=str(e))
 
     elif command_type == "command.stop_listening":
+        global is_listening_active
+        is_listening_active = False
         await audio_manager.stop()
         await manager.broadcast_event(
             "session.state_changed",
             {"previous": "LISTENING", "current": "IDLE"},
         )
+
+    elif command_type == "command.speech_input":
+        text = (payload.get("text") or "").strip()
+        speaker = payload.get("speaker", "interviewer")
+        if text:
+            logger.info("Received client speech input", speaker=speaker, text=text)
+            await manager.broadcast_event(
+                "speech.final",
+                {
+                    "speaker": speaker,
+                    "text": text,
+                    "confidence": payload.get("confidence", 0.95),
+                },
+            )
+            await handle_speech_final(speaker, text)
+
+    elif command_type == "command.speech_partial":
+        text = (payload.get("text") or "").strip()
+        speaker = payload.get("speaker", "interviewer")
+        if text:
+            await manager.broadcast_event(
+                "speech.partial",
+                {
+                    "speaker": speaker,
+                    "text": text,
+                },
+            )
+
+    elif command_type == "command.client_vad_state":
+        speaker = payload.get("speaker", "interviewer")
+        state = payload.get("state", "SILENCE")
+        await manager.broadcast_event(
+            "audio.vad_state_changed",
+            {
+                "speaker": speaker,
+                "state": state,
+            },
+        )
+
+    elif command_type == "command.audio_chunk":
+        b64_data = payload.get("data")
+        speaker = payload.get("speaker", "interviewer")
+        if b64_data and is_listening_active:
+            try:
+                raw_bytes = base64.b64decode(b64_data)
+                int16_arr = np.frombuffer(raw_bytes, dtype=np.int16)
+                float32_arr = int16_arr.astype(np.float32) / 32767.0
+
+                transcriber = get_transcriber()
+                chunk_text = await asyncio.to_thread(transcriber.transcribe, float32_arr)
+                chunk_text = chunk_text.strip() if chunk_text else ""
+                if chunk_text:
+                    logger.info("Transcribed client audio chunk", speaker=speaker, text=chunk_text)
+                    await manager.broadcast_event(
+                        "speech.final",
+                        {
+                            "speaker": speaker,
+                            "text": chunk_text,
+                            "confidence": 0.95,
+                        },
+                    )
+                    await handle_speech_final(speaker, chunk_text)
+            except Exception as e:
+                logger.error("Error processing client audio chunk", error=str(e))
 
     elif command_type == "command.set_mode":
         mode = payload.get("mode", "interview")

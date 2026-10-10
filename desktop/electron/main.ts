@@ -8,6 +8,7 @@ import {
   nativeImage,
   screen,
   shell,
+  session,
 } from "electron";
 import { join } from "path";
 import { existsSync } from "fs";
@@ -194,6 +195,34 @@ async function initialize(): Promise<void> {
   console.log("[Main] AI Teleprompter starting...");
 
   securityManager = new SecurityManager();
+
+  // Automatically grant microphone, audio, and display capture permissions for client-side speech streaming
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    const perm = permission as string;
+    if (
+      perm === "media" ||
+      perm === "audio-capture" ||
+      perm === "display-capture" ||
+      perm === "notifications"
+    ) {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    const perm = permission as string;
+    if (
+      perm === "media" ||
+      perm === "audio-capture" ||
+      perm === "display-capture" ||
+      perm === "notifications"
+    ) {
+      return true;
+    }
+    return false;
+  });
 
   // Start backend before creating windows
   await startBackend();

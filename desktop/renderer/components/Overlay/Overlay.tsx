@@ -16,6 +16,7 @@ import { useWebSocket } from "../../hooks/useWebSocket";
 import { useElectronBridge } from "../../hooks/useElectronBridge";
 import { BlockedModal } from "../License/BlockedModal";
 import { LicenseWarningBanner } from "../License/LicenseWarningBanner";
+import { clientAudioStreamer } from "../../services/clientAudioStreamer";
 import type { ChatMessage } from "../../types";
 
 export const Overlay: React.FC = () => {
@@ -119,15 +120,26 @@ export const Overlay: React.FC = () => {
     window.electronAPI?.send("overlay:set-size", { width: preset.width, height: preset.height });
   };
 
+  // Automatically synchronize client-side audio capture & speech recognition with listening state
+  useEffect(() => {
+    if (isListening && !isBlocked) {
+      clientAudioStreamer.start(sendCommand);
+    } else {
+      clientAudioStreamer.stop();
+    }
+  }, [isListening, isBlocked, sendCommand]);
+
   const handleToggleListening = useCallback(() => {
     if (isListening) {
       sendCommand("command.stop_listening");
       useSessionStore.getState().setListening(false);
       useAudioStore.getState().setCapturing(false);
+      clientAudioStreamer.stop();
     } else {
       sendCommand("command.start_listening", { source: "both" });
       useSessionStore.getState().setListening(true);
       useAudioStore.getState().setCapturing(true);
+      clientAudioStreamer.start(sendCommand);
     }
   }, [isListening, sendCommand]);
 
