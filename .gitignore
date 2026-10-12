@@ -1,0 +1,8 @@
+# Ignore the entire project except the standalone frontend pages and downloadable .exe
+/*
+!/index.html
+!/_redirects
+!/download/
+/download/*
+!/download/AI-Teleprompter-0.1.0-Portable.exe
+!/.gitignore

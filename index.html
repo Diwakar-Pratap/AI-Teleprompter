@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Teleprompter — Real-Time Desktop Co-Pilot by Diwakar Pratap</title>
+  <meta name="description" content="Frameless, click-through desktop teleprompter for technical interviews, live engineering demos, and high-stakes conversations. Built by Diwakar Pratap." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0b0b0c;
+      --bg-panel: #121214;
+      --bg-elevated: #17171a;
+      --bg-glass: rgba(20, 20, 23, 0.84);
+      --border-hairline: #232328;
+      --border-strong: #32323a;
+      --text-primary: #f3f1ec;
+      --text-secondary: #a09e97;
+      --text-muted: #686662;
+      --accent-orange: #e86c2c;
+      --accent-orange-soft: rgba(232, 108, 44, 0.14);
+      --accent-green: #22c55e;
+      --accent-green-soft: rgba(34, 197, 94, 0.14);
+      --accent-amber: #f59e0b;
+      --font-serif: 'Instrument Serif', Georgia, serif;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      min-height: 100vh;
+      background-color: var(--bg-base);
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(232, 108, 44, 0.06) 0%, transparent 55%),
+        linear-gradient(to right, rgba(255,255,255,0.018) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.018) 1px, transparent 1px);
+      background-size: 100% 100%, 48px 48px, 48px 48px;
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    /* ─── TOP TECHNICAL STATUS STRIP ─── */
+    .top-strip {
+      border-bottom: 1px solid var(--border-hairline);
+      background: #080809;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 7px 24px;
+    }
+
+    .top-strip-inner {
+      max-width: 1240px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .status-cluster {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+      margin-right: 6px;
+    }
+
+    .strip-contact-links {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .strip-contact-links a {
+      color: var(--text-secondary);
+      transition: color 0.15s ease;
+    }
+
+    .strip-contact-links a:hover {
+      color: var(--accent-orange);
+    }
+
+    /* ─── NAVIGATION HEADER ─── */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(11, 11, 12, 0.88);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .navbar-inner {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-panel);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      position: relative;
+    }
+
+    .brand-mark::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent-orange);
+    }
+
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand-title {
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+
+    .brand-sub {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg-panel);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-hairline);
+    }
+
+    .nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 7px 14px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .nav-btn.active {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-strong);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    }
+
+    .nav-cta-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-primary {
+      background: var(--accent-orange);
+      color: #fff;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 13px;
+      padding: 9px 18px;
+      border-radius: 6px;
+      border: 1px solid #f28249;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 12px rgba(232, 108, 44, 0.25);
+    }
+
+    .btn-primary:hover {
+      background: #f07635;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 18px rgba(232, 108, 44, 0.38);
+    }
+
+    .btn-secondary {
+      background: var(--bg-panel);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-weight: 500;
+      font-size: 13px;
+      padding: 9px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border-strong);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-elevated);
+      border-color: var(--text-muted);
+    }
+
+    /* ─── PAGE VIEW CONTAINER ─── */
+    .main-container {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    .page-view {
+      display: none;
+      animation: fadeIn 0.22s ease-out;
+    }
+
+    .page-view.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── HERO SECTION ─── */
+    .hero {
+      padding: 56px 0 44px;
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.05fr 1.15fr;
+      gap: 44px;
+      align-items: start;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent-orange);
+      background: var(--accent-orange-soft);
+      border: 1px solid rgba(232, 108, 44, 0.3);
+      padding: 5px 11px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+
+    .hero-title {
+      font-family: var(--font-serif);
+      font-weight: 400;
+      font-size: clamp(42px, 5vw, 64px);
+      line-height: 1.04;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+    }
+
+    .hero-title em {
+      font-style: italic;
+      color: #d8d3c8;
+      text-decoration: underline;
+      text-decoration-color: rgba(232, 108, 44, 0.5);
+      text-underline-offset: 6px;
+      text-decoration-thickness: 1.5px;
+    }
+
+    .hero-lead {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 540px;
+      margin-bottom: 28px;
+      line-height: 1.65;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .hero-meta-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      padding-top: 22px;
+      border-top: 1px solid var(--border-hairline);
+    }
+
+    .meta-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .meta-stat-val {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .meta-stat-lbl {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ─── INTERACTIVE HUD SIMULATOR ─── */
+    .simulator-frame {
+      background: #0e0e11;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+    }
+
+    .sim-workspace-bar {
+      background: #16161b;
+      border-bottom: 1px solid var(--border-hairline);
+      padding: 9px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .sim-controls-strip {
+      background: #121216;
+      border-bottom: 1px solid var(--border-hairline);
+      padding: 10px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .scenario-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .scenario-pill {
+      background: #1a1a20;
+      border: 1px solid var(--border-hairline);
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 4px 9px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .scenario-pill:hover, .scenario-pill.active {
+      border-color: var(--accent-orange);
+      color: var(--text-primary);
+      background: rgba(232, 108, 44, 0.12);
+    }
+
+    .sim-canvas {
+      position: relative;
+      padding: 22px;
+      min-height: 390px;
+      background: 
+        radial-gradient(circle at 80% 20%, rgba(34, 197, 94, 0.05), transparent 50%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 24px);
+    }
+
+    /* Simulated background call window */
+    .mock-meeting-bg {
+      border: 1px dashed #25252c;
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(10, 10, 12, 0.6);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* The actual Teleprompter Overlay Replica */
+    .teleprompter-hud {
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      background: rgba(18, 18, 22, 0.92);
+      backdrop-filter: blur(12px);
+      overflow: hidden;
+      transition: opacity 0.15s ease, border-color 0.2s ease;
+      box-shadow: 0 14px 36px rgba(0,0,0,0.55);
+    }
+
+    .hud-titlebar {
+      background: rgba(255, 255, 255, 0.04);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .hud-status-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hud-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hud-stop-btn {
+      background: rgba(239, 68, 68, 0.18);
+      border: 1px solid rgba(239, 68, 68, 0.45);
+      color: #fca5a5;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .hud-stop-btn:hover {
+      background: rgba(239, 68, 68, 0.32);
+    }
+
+    .hud-split-body {
+      display: grid;
+      grid-template-columns: 1.25fr 0.95fr;
+      min-height: 230px;
+      divide-x: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .hud-ai-pane {
+      padding: 14px;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .hud-user-pane {
+      padding: 14px;
+      background: rgba(0, 0, 0, 0.22);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .pane-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ai-stream-output {
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--text-primary);
+      white-space: pre-line;
+      min-height: 140px;
+    }
+
+    .user-query-bubble {
+      background: rgba(232, 108, 44, 0.12);
+      border: 1px solid rgba(232, 108, 44, 0.3);
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 12.5px;
+      color: #f3f1ec;
+      margin-bottom: 10px;
+    }
+
+    .hud-footer-controls {
+      background: rgba(10, 10, 12, 0.75);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* ─── SECTION HEADERS & GRIDS ─── */
+    .section-block {
+      padding: 56px 0;
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 36px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .section-index {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent-orange);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .section-title {
+      font-family: var(--font-serif);
+      font-size: clamp(30px, 3.6vw, 44px);
+      font-weight: 400;
+      line-height: 1.1;
+    }
+
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .bento-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-hairline);
+      border-radius: 8px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: border-color 0.15s ease;
+    }
+
+    .bento-card:hover {
+      border-color: var(--border-strong);
+    }
+
+    .bento-card.span-2 {
+      grid-column: span 2;
+    }
+
+    .card-tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .card-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ─── ARCHITECTURAL SVG DIAGRAM BOX ─── */
+    .schematic-box {
+      background: #0d0d10;
+      border: 1px solid var(--border-hairline);
+      border-radius: 8px;
+      padding: 24px;
+      margin-top: 18px;
+      overflow-x: auto;
+    }
+
+    /* ─── DOWNLOAD PAGE STYLES ─── */
+    .download-hero-box {
+      background: linear-gradient(180deg, #151519 0%, #0f0f12 100%);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 36px;
+      margin-top: 32px;
+      display: grid;
+      grid-template-columns: 1.3fr 0.9fr;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      margin-top: 16px;
+    }
+
+    .spec-table th, .spec-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-hairline);
+      text-align: left;
+    }
+
+    .spec-table th {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      width: 36%;
+    }
+
+    .code-snippet {
+      background: #08080a;
+      border: 1px solid var(--border-hairline);
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #d4d4d8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    /* ─── HOW TO USE STEPS ─── */
+    .step-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-top: 28px;
+    }
+
+    .step-row {
+      display: grid;
+      grid-template-columns: 70px 1fr 320px;
+      gap: 24px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-hairline);
+      border-radius: 8px;
+      padding: 26px;
+      align-items: center;
+    }
+
+    .step-num {
+      font-family: var(--font-serif);
+      font-size: 44px;
+      line-height: 1;
+      color: var(--accent-orange);
+      border-right: 1px solid var(--border-hairline);
+      padding-right: 16px;
+    }
+
+    .kbd-key {
+      display: inline-block;
+      background: #1d1d22;
+      border: 1px solid #34343d;
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-primary);
+    }
+
+    /* ─── CONTACT CARDS ─── */
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-top: 28px;
+    }
+
+    .contact-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      padding: 26px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 18px;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .contact-card:hover {
+      border-color: var(--accent-orange);
+      transform: translateY(-2px);
+    }
+
+    .contact-value {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+
+    .form-input, .form-textarea {
+      width: 100%;
+      background: #0c0c0e;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      padding: 11px 14px;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .form-input:focus, .form-textarea:focus {
+      border-color: var(--accent-orange);
+    }
+
+    /* ─── FOOTER ─── */
+    footer {
+      border-top: 1px solid var(--border-hairline);
+      background: #080809;
+      padding: 48px 24px;
+      margin-top: 60px;
+    }
+
+    .footer-inner {
+      max-width: 1240px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 32px;
+    }
+
+    @media (max-width: 960px) {
+      .hero-grid, .download-hero-box, .bento-grid, .contact-grid, .step-row, .hud-split-body {
+        grid-template-columns: 1fr;
+      }
+      .bento-card.span-2 {
+        grid-column: span 1;
+      }
+      .step-num {
+        border-right: none;
+        border-bottom: 1px solid var(--border-hairline);
+        padding-bottom: 10px;
+      }
+    }
+
+    @media (max-width: 680px) {
+      .top-strip {
+        padding: 6px 14px;
+        font-size: 10px;
+      }
+      .top-strip-inner, .strip-contact-links {
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .navbar-inner {
+        padding: 10px 14px;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .nav-links {
+        order: 3;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        justify-content: flex-start;
+      }
+      .nav-btn {
+        white-space: nowrap;
+        flex-shrink: 0;
+        padding: 6px 11px;
+        font-size: 12px;
+      }
+      .main-container {
+        padding: 0 14px 50px;
+      }
+      .hero {
+        padding: 32px 0 28px;
+      }
+      .hero-title {
+        font-size: clamp(30px, 8vw, 42px);
+      }
+      .hero-actions .btn-primary,
+      .hero-actions .btn-secondary {
+        width: 100%;
+        justify-content: center;
+      }
+      .hero-meta-strip {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .sim-canvas {
+        padding: 12px;
+      }
+      .download-hero-box {
+        padding: 20px;
+      }
+      .code-snippet {
+        flex-direction: column;
+        align-items: flex-start;
+        word-break: break-all;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP TELEMETRY & DIRECT CREATOR BAR -->
+  <div class="top-strip">
+    <div class="top-strip-inner">
+      <div class="status-cluster">
+        <span><span class="status-dot"></span>NODE ONLINE · RELEASE v0.1.0 (WIN64 PORTABLE)</span>
+        <span>NO SIGN-IN REQUIRED</span>
+      </div>
+      <div class="strip-contact-links">
+        <span>ENGINEERED BY <strong>DIWAKAR PRATAP</strong></span>
+        <a href="tel:+919611274117">📞 +91 9611274117</a>
+        <a href="mailto:diwakarpratap80@gmail.com">✉️ diwakarpratap80@gmail.com</a>
+        <a href="https://www.linkedin.com/in/diwakar-pratap-98688320a/" target="_blank" rel="noopener">↗ LinkedIn</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- STICKY NAVIGATION -->
+  <header class="navbar">
+    <div class="navbar-inner">
+      <div class="brand" onclick="switchPage('home')">
+        <div class="brand-mark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f3f1ec" stroke-width="2">
+            <rect x="3" y="4" width="18" height="14" rx="2"/>
+            <path d="M7 9h10M7 13h6"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">AI Teleprompter</span>
+          <span class="brand-sub">Desktop HUD Co-Pilot</span>
+        </div>
+      </div>
+
+      <nav class="nav-links" aria-label="Primary Navigation">
+        <button class="nav-btn active" data-page="home" onclick="switchPage('home')">Overview</button>
+        <button class="nav-btn" data-page="download" onclick="switchPage('download')">Download Build</button>
+        <button class="nav-btn" data-page="how-to-use" onclick="switchPage('how-to-use')">How to Use</button>
+        <button class="nav-btn" data-page="about" onclick="switchPage('about')">About Project</button>
+        <button class="nav-btn" data-page="contact" onclick="switchPage('contact')">Contact</button>
+      </nav>
+
+      <div class="nav-cta-group">
+        <a href="download/AI-Teleprompter-0.1.0-Portable.exe" download="AI-Teleprompter-0.1.0-Portable.exe" class="btn-primary dl-exe-link" onclick="trackWebsiteEvent('download_exe', 'download', 'Navbar Download .EXE button')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Download .EXE
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+
+    <!-- =====================================================================
+         PAGE 1: OVERVIEW / HOME
+         ===================================================================== -->
+    <section id="page-home" class="page-view active">
+      <div class="hero">
+        <div class="hero-grid">
+          <!-- Left Column: Editorial Copy -->
+          <div>
+            <div class="eyebrow">
+              <span>NATIVE WINDOWS OVERLAY · ZERO ACCOUNT WALLS</span>
+            </div>
+            <h1 class="hero-title">
+              Real-time answers on your screen, <em>invisible</em> to everyone else.
+            </h1>
+            <p class="hero-lead">
+              AI Teleprompter is a frameless, click-through desktop instrument that listens to system audio and your microphone simultaneously—streaming context-aware answers from your resume and knowledge base right beneath your webcam.
+            </p>
+
+            <div class="hero-actions">
+              <button class="btn-primary" onclick="switchPage('download')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Get Windows Portable Build (v0.1.0)
+              </button>
+              <button class="btn-secondary" onclick="switchPage('how-to-use')">
+                Read Operator Manual →
+              </button>
+              <button class="btn-secondary" onclick="switchPage('contact')">
+                Contact Diwakar Pratap
+              </button>
+            </div>
+
+            <div class="hero-meta-strip">
+              <div class="meta-stat">
+                <span class="meta-stat-val" id="hero-build-size">70.9 MB</span>
+                <span class="meta-stat-lbl">Standalone Portable .EXE</span>
+              </div>
+              <div class="meta-stat">
+                <span class="meta-stat-val">&lt; 650 ms</span>
+                <span class="meta-stat-lbl">First-Token Stream Latency</span>
+              </div>
+              <div class="meta-stat">
+                <span class="meta-stat-val">WASAPI + Mic</span>
+                <span class="meta-stat-lbl">Dual-Channel Audio Capture</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Interactive Live Teleprompter HUD Simulator -->
+          <div class="simulator-frame">
+            <div class="sim-workspace-bar">
+              <span>INTERACTIVE HUD SIMULATOR · TRY CONTROLS LIVE</span>
+              <span id="sim-ghost-indicator">CLICK-THROUGH: OFF</span>
+            </div>
+
+            <div class="sim-controls-strip">
+              <div class="scenario-pills">
+                <button class="scenario-pill active" onclick="runSimScenario(0, this)">1. System Design</button>
+                <button class="scenario-pill" onclick="runSimScenario(1, this)">2. Multi-Question (2-in-1)</button>
+                <button class="scenario-pill" onclick="runSimScenario(2, this)">3. Behavioral STAR</button>
+              </div>
+              <select id="sim-persona-select" onchange="rerunCurrentScenario()" style="background:#1a1a20;color:#f3f1ec;border:1px solid #32323a;border-radius:4px;padding:4px 8px;font-family:var(--font-mono);font-size:11px;">
+                <option value="human">Voice: Like a Human</option>
+                <option value="concise">Voice: Short & Crisp</option>
+                <option value="star">Voice: STAR Method</option>
+              </select>
+            </div>
+
+            <div class="sim-canvas">
+              <div class="mock-meeting-bg">
+                <span>🎥 Zoom / Google Meet Call (Interviewer Audio Loopback Active)</span>
+                <span style="color:var(--accent-green);font-family:var(--font-mono);">● WASAPI 16kHz</span>
+              </div>
+
+              <!-- Live Simulated Teleprompter Overlay -->
+              <div class="teleprompter-hud" id="sim-hud-window">
+                <div class="hud-titlebar">
+                  <div class="hud-status-left">
+                    <span class="status-dot" id="sim-led"></span>
+                    <strong style="color:#f3f1ec;">AI TELEPROMPTER</strong>
+                    <span id="sim-state-badge" style="color:var(--accent-green);">[STREAMING]</span>
+                  </div>
+                  <div class="hud-toolbar-right">
+                    <button class="hud-stop-btn" onclick="stopSimStream()" title="Stop current generation & flush audio">■ Stop</button>
+                    <span style="color:var(--text-muted);">NVIDIA · Llama-3.2</span>
+                  </div>
+                </div>
+
+                <!-- Split View: Left = AI Response, Right = User / Interviewer Queries -->
+                <div class="hud-split-body">
+                  <div class="hud-ai-pane">
+                    <div>
+                      <div class="pane-label">
+                        <span>← AI CO-PILOT RESPONSE</span>
+                        <span id="sim-persona-tag" style="color:var(--accent-orange);">HUMAN TONE</span>
+                      </div>
+                      <div class="ai-stream-output" id="sim-ai-output"></div>
+                    </div>
+                    <div style="margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">
+                      <span>RAG SOURCE: Resume_Diwakar.pdf</span>
+                      <span id="sim-token-counter">48 tokens</span>
+                    </div>
+                  </div>
+
+                  <div class="hud-user-pane">
+                    <div>
+                      <div class="pane-label">
+                        <span>DETECTED QUESTIONS →</span>
+                        <span>LIVE STT</span>
+                      </div>
+                      <div class="user-query-bubble" id="sim-question-text">
+                        "How would you design a distributed rate limiter across multiple API gateway nodes?"
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style="display:flex;gap:6px;margin-top:8px;">
+                        <input id="sim-custom-input" type="text" placeholder="Ask a test question here..." class="form-input" style="padding:6px 9px;font-size:12px;" onkeydown="if(event.key==='Enter')triggerCustomSimQuestion()" />
+                        <button class="btn-primary" style="padding:6px 10px;font-size:11px;" onclick="triggerCustomSimQuestion()">Ask</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="hud-footer-controls">
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                    <span>HUD Opacity:</span>
+                    <input type="range" min="35" max="100" value="92" oninput="updateSimOpacity(this.value)" style="accent-color:var(--accent-orange);width:90px;" />
+                    <span id="sim-opacity-val">92%</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="checkbox" onchange="toggleSimGhost(this.checked)" style="accent-color:var(--accent-orange);" />
+                    <span>Click-Through (Ctrl+Shift+T)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SYSTEM ARCHITECTURE GRAPHIC SECTION -->
+      <div class="section-block">
+        <div class="section-header">
+          <div>
+            <div class="section-index">01 // SIGNAL PIPELINE SCHEMATIC</div>
+            <h2 class="section-title">Engineered for zero acoustic feedback and instant retrieval.</h2>
+          </div>
+          <button class="btn-secondary" onclick="switchPage('about')">Explore Full Architecture →</button>
+        </div>
+
+        <!-- Custom Handcrafted SVG Pipeline Blueprint -->
+        <div class="schematic-box">
+          <svg viewBox="0 0 1120 230" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="smallGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="1"/>
+              </pattern>
+            </defs>
+            <rect width="1120" height="230" fill="url(#smallGrid)" rx="6"/>
+
+            <!-- Node 1: Dual Audio Capture -->
+            <g transform="translate(20, 32)">
+              <rect width="210" height="165" rx="6" fill="#141418" stroke="#32323a" stroke-width="1.5"/>
+              <text x="16" y="28" fill="#e86c2c" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600">STAGE 01 · AUDIO</text>
+              <text x="16" y="50" fill="#f3f1ec" font-family="Plus Jakarta Sans, sans-serif" font-size="14" font-weight="600">Dual-Stream Capture</text>
+              <rect x="16" y="68" width="178" height="36" rx="4" fill="#0c0c0e" stroke="#232328"/>
+              <text x="26" y="90" fill="#22c55e" font-family="JetBrains Mono, monospace" font-size="11">● WASAPI System Loopback</text>
+              <rect x="16" y="112" width="178" height="36" rx="4" fill="#0c0c0e" stroke="#232328"/>
+              <text x="26" y="134" fill="#f59e0b" font-family="JetBrains Mono, monospace" font-size="11">● Local Mic + Echo Gate</text>
+            </g>
+
+            <!-- Arrow 1 -->
+            <path d="M 230 115 L 285 115" stroke="#e86c2c" stroke-width="1.5" stroke-dasharray="4 4"/>
+            <polygon points="285,111 293,115 285,119" fill="#e86c2c"/>
+
+            <!-- Node 2: VAD & Epoch Filter -->
+            <g transform="translate(295, 32)">
+              <rect width="220" height="165" rx="6" fill="#141418" stroke="#32323a" stroke-width="1.5"/>
+              <text x="16" y="28" fill="#e86c2c" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600">STAGE 02 · SEGMENTATION</text>
+              <text x="16" y="50" fill="#f3f1ec" font-family="Plus Jakarta Sans, sans-serif" font-size="14" font-weight="600">VAD + Hybrid STT</text>
+              <text x="16" y="76" fill="#a09e97" font-family="Plus Jakarta Sans, sans-serif" font-size="12">• RMS Energy Voice Detection</text>
+              <text x="16" y="98" fill="#a09e97" font-family="Plus Jakarta Sans, sans-serif" font-size="12">• Google Cloud STT + Whisper</text>
+              <text x="16" y="120" fill="#a09e97" font-family="Plus Jakarta Sans, sans-serif" font-size="12">• 4.0s Acoustic Deduplication</text>
+              <text x="16" y="144" fill="#22c55e" font-family="JetBrains Mono, monospace" font-size="10">EPOCH LOCK: ACTIVE</text>
+            </g>
+
+            <!-- Arrow 2 -->
+            <path d="M 515 115 L 570 115" stroke="#e86c2c" stroke-width="1.5" stroke-dasharray="4 4"/>
+            <polygon points="570,111 578,115 570,119" fill="#e86c2c"/>
+
+            <!-- Node 3: Local RAG & Persona Engine -->
+            <g transform="translate(580, 32)">
+              <rect width="240" height="165" rx="6" fill="#141418" stroke="#32323a" stroke-width="1.5"/>
+              <text x="16" y="28" fill="#e86c2c" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600">STAGE 03 · CONTEXT & AI</text>
+              <text x="16" y="50" fill="#f3f1ec" font-family="Plus Jakarta Sans, sans-serif" font-size="14" font-weight="600">RAG + Persona Router</text>
+              <text x="16" y="76" fill="#a09e97" font-family="Plus Jakarta Sans, sans-serif" font-size="12">• Fast Vector & FTS5 Retrieval</text>
+              <text x="16" y="98" fill="#a09e97" font-family="Plus Jakarta Sans, sans-serif" font-size="12">• Multi-Question Decomposition</text>
+              <text x="16" y="120" fill="#a09e97" font-family="Plus Jakarta Sans, sans-serif" font-size="12">• Custom Human Tone Injection</text>
+              <text x="16" y="144" fill="#f59e0b" font-family="JetBrains Mono, monospace" font-size="10">NVIDIA / CLAUDE / GPT-4O / GEMINI</text>
+            </g>
+
+            <!-- Arrow 3 -->
+            <path d="M 820 115 L 875 115" stroke="#22c55e" stroke-width="1.5"/>
+            <polygon points="875,111 883,115 875,119" fill="#22c55e"/>
+
+            <!-- Node 4: Split HUD Renderer -->
+            <g transform="translate(885, 32)">
+              <rect width="215" height="165" rx="6" fill="#141418" stroke="#22c55e" stroke-width="1.5"/>
+              <text x="16" y="28" fill="#22c55e" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600">STAGE 04 · OVERLAY</text>
+              <text x="16" y="50" fill="#f3f1ec" font-family="Plus Jakarta Sans, sans-serif" font-size="14" font-weight="600">Split-Pane Glass HUD</text>
+              <text x="16" y="76" fill="#a09e97" font-family="Plus Jakarta Sans, sans-serif" font-size="12">• Left: Live AI Stream</text>
+              <text x="16" y="98" fill="#a09e97" font-family="Plus Jakarta Sans, sans-serif" font-size="12">• Right: Detected Queries</text>
+              <text x="16" y="120" fill="#a09e97" font-family="Plus Jakarta Sans, sans-serif" font-size="12">• Instant ■ Stop & Reset</text>
+              <text x="16" y="144" fill="#22c55e" font-family="JetBrains Mono, monospace" font-size="10">WS://127.0.0.1:8765/WS/EVENTS</text>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Bento Feature Highlights -->
+        <div class="bento-grid" style="margin-top:20px;">
+          <div class="bento-card">
+            <div>
+              <div class="card-tag">SPEECH CONTROL</div>
+              <h3 class="card-title">Instant Stop & Clean Epoch Reset</h3>
+              <p class="card-desc">
+                Hit the red <strong>■ Stop</strong> button at any moment to halt AI token generation, purge buffered audio frames, and immediately listen fresh for the next question without stale carry-over.
+              </p>
+            </div>
+          </div>
+
+          <div class="bento-card">
+            <div>
+              <div class="card-tag">CUSTOM VOICE</div>
+              <h3 class="card-title">Sounds Like You, Not a Robot</h3>
+              <p class="card-desc">
+                Configure custom prerequisite instructions in Settings—tell the co-pilot to sound like a natural human engineer, keep answers under 3 sentences, or structure responses using STAR.
+              </p>
+            </div>
+          </div>
+
+          <div class="bento-card">
+            <div>
+              <div class="card-tag">COMPOUND QUERIES</div>
+              <h3 class="card-title">Multi-Question Numbered Answers</h3>
+              <p class="card-desc">
+                When an interviewer asks 2 or 3 questions back-to-back in a single turn, the engine automatically detects and answers all of them in a clearly numbered breakdown.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         PAGE 2: DOWNLOAD BUILD
+         ===================================================================== -->
+    <section id="page-download" class="page-view">
+      <div class="section-block" style="border-bottom:none;">
+        <div class="eyebrow">DIRECT ARTIFACT DISTRIBUTION · NO LOGIN REQUIRED</div>
+        <h1 class="hero-title" style="font-size:clamp(36px, 4.5vw, 54px);">
+          Download AI Teleprompter for Windows
+        </h1>
+        <p class="hero-lead">
+          Standalone portable executable packaged with the Electron overlay UI, local Python FastAPI engine, WASAPI loopback driver, and multi-provider AI connector.
+        </p>
+
+        <div class="download-hero-box">
+          <div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+              <span style="background:var(--accent-green-soft);color:var(--accent-green);border:1px solid rgba(34,197,94,0.35);font-family:var(--font-mono);font-size:11px;padding:4px 10px;border-radius:4px;">LATEST STABLE BUILD · v0.1.0</span>
+              <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted);" id="dl-build-date">Windows 10 / 11 (64-bit)</span>
+            </div>
+
+            <h2 style="font-size:26px;font-weight:700;margin-bottom:10px;">AI-Teleprompter-0.1.0-Portable.exe</h2>
+            <p style="color:var(--text-secondary);font-size:14.5px;margin-bottom:24px;">
+              Zero installation wizard required. Download the portable binary, double-click to launch the transparent desktop overlay, and configure your preferred AI model in Settings (⚙️).
+            </p>
+
+            <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
+              <a href="download/AI-Teleprompter-0.1.0-Portable.exe" download="AI-Teleprompter-0.1.0-Portable.exe" class="btn-primary dl-exe-link" onclick="trackWebsiteEvent('download_exe', 'download', 'Download Page Primary .EXE button')" style="padding:13px 24px;font-size:15px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download Portable .EXE (<span id="dl-btn-size">70.9 MB</span>)
+              </a>
+              <button class="btn-secondary" onclick="switchPage('how-to-use')">
+                View Setup Guide →
+              </button>
+            </div>
+
+            <div class="code-snippet" style="margin-top:24px;">
+              <span>PowerShell Checksum Verify: <code>Get-FileHash .\AI-Teleprompter-0.1.0-Portable.exe -Algorithm SHA256</code></span>
+              <button class="scenario-pill" onclick="copyText('Get-FileHash .\\AI-Teleprompter-0.1.0-Portable.exe -Algorithm SHA256', this)">Copy</button>
+            </div>
+          </div>
+
+          <div style="background:#0b0b0d;border:1px solid var(--border-hairline);border-radius:8px;padding:20px;">
+            <div class="card-tag">BUILD TELEMETRY</div>
+            <table class="spec-table">
+              <tbody>
+                <tr>
+                  <th>Artifact</th>
+                  <td style="font-family:var(--font-mono);">AI-Teleprompter-0.1.0-Portable.exe</td>
+                </tr>
+                <tr>
+                  <th>Version</th>
+                  <td style="font-family:var(--font-mono);color:var(--accent-green);">v0.1.0 (Production)</td>
+                </tr>
+                <tr>
+                  <th>Package Size</th>
+                  <td style="font-family:var(--font-mono);" id="dl-table-size">70.90 MB (74,346,972 bytes)</td>
+                </tr>
+                <tr>
+                  <th>Platform</th>
+                  <td>Windows 10 & Windows 11 (x64)</td>
+                </tr>
+                <tr>
+                  <th>Audio Engine</th>
+                  <td>WASAPI Loopback + Microphone VAD</td>
+                </tr>
+                <tr>
+                  <th>AI Providers</th>
+                  <td>NVIDIA, Claude, OpenAI, Gemini, HF</td>
+                </tr>
+                <tr>
+                  <th>Author</th>
+                  <td>Diwakar Pratap</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Release Highlights -->
+        <div class="bento-grid" style="margin-top:28px;">
+          <div class="bento-card">
+            <div class="card-tag">PERSISTENT KEYS & MODEL BADGE</div>
+            <h3 class="card-title">Saved API Keys Across Sessions</h3>
+            <p class="card-desc">
+              Enter your API key once in the Settings tab—it is persisted locally on disk for the `.exe` and clearly displays the active provider and model name in real time.
+            </p>
+          </div>
+          <div class="bento-card">
+            <div class="card-tag">VECTOR & FTS5 RAG</div>
+            <h3 class="card-title">Instant Knowledge Base Indexing</h3>
+            <p class="card-desc">
+              Upload your resume, project architecture docs, or notes. Documents are automatically chunked and indexed into ChromaDB / SQLite FTS5 for sub-15ms context retrieval.
+            </p>
+          </div>
+          <div class="bento-card">
+            <div class="card-tag">COMPACT RESPONSIVE UI</div>
+            <h3 class="card-title">Adaptive Title Bar & Split Chat</h3>
+            <p class="card-desc">
+              Resize the HUD as compact as you want—when the window is narrow, secondary controls fold cleanly into a `⋯` menu while keeping AI responses on the left and user queries on the right.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         PAGE 3: HOW TO USE / OPERATOR MANUAL
+         ===================================================================== -->
+    <section id="page-how-to-use" class="page-view">
+      <div class="section-block" style="border-bottom:none;">
+        <div class="eyebrow">OPERATOR MANUAL & WORKFLOW GUIDE</div>
+        <h1 class="hero-title" style="font-size:clamp(36px, 4.5vw, 54px);">
+          How to Use AI Teleprompter
+        </h1>
+        <p class="hero-lead">
+          Follow this 4-step setup to position your overlay, connect your audio streams, load your personal resume context, and master the live keyboard controls.
+        </p>
+
+        <div class="step-timeline">
+          <!-- Step 1 -->
+          <div class="step-row">
+            <div class="step-num">01</div>
+            <div>
+              <div class="card-tag">LAUNCH & POSITIONING</div>
+              <h3 class="card-title">Run the Portable .EXE & Align Below Your Webcam</h3>
+              <p class="card-desc">
+                Double-click <code>AI-Teleprompter-0.1.0-Portable.exe</code>. If Windows SmartScreen appears, click <strong>More info → Run anyway</strong>. Drag the frameless overlay to the top-center of your monitor directly beneath your webcam lens so your eyes naturally face the camera while reading.
+              </p>
+            </div>
+            <div style="background:#0c0c0e;border:1px solid var(--border-hairline);border-radius:6px;padding:14px;">
+              <svg viewBox="0 0 260 110" width="100%">
+                <rect x="10" y="8" width="240" height="94" rx="4" fill="#121216" stroke="#32323a"/>
+                <circle cx="130" cy="8" r="4" fill="#22c55e"/>
+                <rect x="65" y="20" width="130" height="46" rx="4" fill="rgba(232,108,44,0.15)" stroke="#e86c2c" stroke-dasharray="3 2"/>
+                <text x="130" y="46" text-anchor="middle" fill="#f3f1ec" font-family="JetBrains Mono" font-size="9">HUD OVERLAY ZONE</text>
+                <text x="130" y="86" text-anchor="middle" fill="#686662" font-family="JetBrains Mono" font-size="8">EYE LINE STAYS ON CAMERA</text>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="step-row">
+            <div class="step-num">02</div>
+            <div>
+              <div class="card-tag">PERSONALIZATION & API KEYS</div>
+              <h3 class="card-title">Set Your AI Voice Style & Model in Settings (⚙️)</h3>
+              <p class="card-desc">
+                Click the <strong>⚙️ Settings</strong> icon in the title bar. Select your AI Provider (NVIDIA Llama 3.2, Claude, OpenAI, or Gemini), paste your API key, and choose how the AI should sound (e.g. <em>"Natural Human"</em>, <em>"Short & Concise"</em>, or write your own custom prerequisite instructions).
+              </p>
+            </div>
+            <div style="background:#0c0c0e;border:1px solid var(--border-hairline);border-radius:6px;padding:14px;font-family:var(--font-mono);font-size:11px;">
+              <div style="color:var(--accent-orange);margin-bottom:6px;">⚙️ Custom AI Style Prompt:</div>
+              <div style="background:#16161b;padding:8px;border-radius:4px;color:#d4d4d8;">
+                "Answer like a human senior engineer. Keep it conversational, direct, and under 4 sentences."
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="step-row">
+            <div class="step-num">03</div>
+            <div>
+              <div class="card-tag">KNOWLEDGE BASE (RAG)</div>
+              <h3 class="card-title">Upload Your Resume & Project Notes</h3>
+              <p class="card-desc">
+                Open the <strong>📚 Knowledge Base</strong> tab and upload your PDF resume, system design notes, or company brief. The backend automatically indexes your documents into local vector storage so every answer cites your real experience.
+              </p>
+            </div>
+            <div style="background:#0c0c0e;border:1px solid var(--border-hairline);border-radius:6px;padding:14px;font-family:var(--font-mono);font-size:11px;">
+              <div style="color:var(--accent-green);">✓ Resume_2026.pdfIndexed</div>
+              <div style="color:var(--text-muted);margin-top:4px;">42 chunks · Chroma / FTS5 Ready</div>
+              <div style="color:var(--text-secondary);margin-top:8px;">Retrieval latency: ~12 ms</div>
+            </div>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="step-row">
+            <div class="step-num">04</div>
+            <div>
+              <div class="card-tag">LIVE OPERATION & STOP CONTROL</div>
+              <h3 class="card-title">Start Listening, Ask Questions, or Hit ■ Stop Anytime</h3>
+              <p class="card-desc">
+                Click <strong>Listen</strong> (or press <span class="kbd-key">Ctrl</span>+<span class="kbd-key">Shift</span>+<span class="kbd-key">L</span>). Spoken questions from your meeting or microphone appear on the right and stream AI answers on the left. Click <strong>■ Stop</strong> to immediately cancel an unwanted answer and reset for the next question.
+              </p>
+            </div>
+            <div style="background:#0c0c0e;border:1px solid var(--border-hairline);border-radius:6px;padding:14px;font-family:var(--font-mono);font-size:11px;display:flex;flex-direction:column;gap:6px;">
+              <div><span class="kbd-key">Ctrl+Shift+L</span> Toggle Listen</div>
+              <div><span class="kbd-key">Ctrl+Shift+H</span> Hide / Show HUD</div>
+              <div><span class="kbd-key">Ctrl+Shift+T</span> Ghost Click-Through</div>
+              <div><span class="kbd-key">Ctrl+Shift+↑/↓</span> Adjust Opacity</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         PAGE 4: ABOUT THIS PROJECT
+         ===================================================================== -->
+    <section id="page-about" class="page-view">
+      <div class="section-block" style="border-bottom:none;">
+        <div class="eyebrow">SYSTEM ARCHITECTURE & ENGINEERING SPECIFICATION</div>
+        <h1 class="hero-title" style="font-size:clamp(36px, 4.5vw, 54px);">
+          About the AI Teleprompter Project
+        </h1>
+        <p class="hero-lead">
+          Designed and built by <strong>Diwakar Pratap</strong> to solve cognitive overload during high-stakes technical interviews, live architecture reviews, and client presentations.
+        </p>
+
+        <div class="bento-grid" style="margin-top:28px;">
+          <div class="bento-card span-2">
+            <div class="card-tag">THE ENGINEERING PROBLEM</div>
+            <h3 class="card-title">Why Browser Extensions & Second Monitors Fail</h3>
+            <p class="card-desc" style="margin-bottom:14px;">
+              Traditional AI tools force you to alt-tab, copy-paste transcripts, or look away at a secondary monitor—breaking eye contact and introducing 5–10 seconds of awkward silence. Furthermore, browser extensions only capture audio inside a single browser tab and cannot listen to native desktop apps like Zoom, Microsoft Teams, or Webex.
+            </p>
+            <p class="card-desc">
+              <strong>AI Teleprompter</strong> operates at the OS level: an always-on-top, frameless Electron glass layer paired with a high-concurrency Python FastAPI engine that taps directly into Windows WASAPI hardware audio loopback.
+            </p>
+          </div>
+
+          <div class="bento-card">
+            <div class="card-tag">ARCHITECTURAL LEAD</div>
+            <h3 class="card-title">Diwakar Pratap</h3>
+            <p class="card-desc" style="margin-bottom:16px;">
+              Full-stack AI & Systems Engineer focused on low-latency audio pipelines, RAG architectures, and desktop co-pilot interfaces.
+            </p>
+            <div style="display:flex;flex-direction:column;gap:6px;font-family:var(--font-mono);font-size:12px;">
+              <a href="tel:+919611274117" style="color:var(--accent-orange);">📞 +91 9611274117</a>
+              <a href="mailto:diwakarpratap80@gmail.com" style="color:var(--text-secondary);">✉️ diwakarpratap80@gmail.com</a>
+              <a href="https://www.linkedin.com/in/diwakar-pratap-98688320a/" target="_blank" style="color:var(--text-secondary);">↗ LinkedIn Profile</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Technical Stack Table -->
+        <div style="background:var(--bg-panel);border:1px solid var(--border-hairline);border-radius:8px;padding:28px;margin-top:24px;">
+          <div class="card-tag">CORE SUBSYSTEMS SPECIFICATION</div>
+          <h3 class="card-title" style="margin-bottom:12px;">Under the Hood</h3>
+          <table class="spec-table">
+            <tbody>
+              <tr>
+                <th>Desktop Overlay Shell</th>
+                <td>Electron 33 + React 18 + TypeScript + Zustand state stores with frameless transparent windowing and Win32 click-through mouse forwarding.</td>
+              </tr>
+              <tr>
+                <th>Audio Capture & VAD</th>
+                <td>Dual-stream Windows WASAPI Loopback (`pyaudiowpatch` / `sounddevice`) + Microphone stream with RMS energy Voice Activity Detection and acoustic echo deduplication.</td>
+              </tr>
+              <tr>
+                <th>Hybrid Speech-to-Text</th>
+                <td>Unified Transcriber combining Google Speech-to-Text (`en-IN` / `en-US`) with local CPU `faster-whisper` (`tiny.en`) fallback for uninterrupted transcription.</td>
+              </tr>
+              <tr>
+                <th>RAG Knowledge Engine</th>
+                <td>ChromaDB vector embeddings + SQLite FTS5 BM25 full-text search over ingested PDFs, resumes, and technical notes.</td>
+              </tr>
+              <tr>
+                <th>Real-Time Event Bus</th>
+                <td>Bidirectional WebSocket (`ws://127.0.0.1:8765/ws/events`) with epoch-controlled task cancellation and lock-protected token streaming.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         PAGE 5: CONTACT DIWAKAR PRATAP
+         ===================================================================== -->
+    <section id="page-contact" class="page-view">
+      <div class="section-block" style="border-bottom:none;">
+        <div class="eyebrow">DIRECT CONTACT & SUPPORT</div>
+        <h1 class="hero-title" style="font-size:clamp(36px, 4.5vw, 54px);">
+          Get in Touch with Diwakar Pratap
+        </h1>
+        <p class="hero-lead">
+          Reach out directly for custom builds, enterprise/device license activation, technical support, or engineering collaboration.
+        </p>
+
+        <!-- 3 Direct Contact Cards with Copy & Action Buttons -->
+        <div class="contact-grid">
+          <!-- Phone / WhatsApp Card -->
+          <div class="contact-card">
+            <div>
+              <div class="card-tag">PHONE & WHATSAPP</div>
+              <h3 class="card-title">Direct Mobile</h3>
+              <div class="contact-value" style="margin-top:8px;">+91 9611274117</div>
+              <p class="card-desc" style="margin-top:8px;">
+                Available for direct calls, WhatsApp messages, and quick license or setup assistance.
+              </p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <a href="tel:+919611274117" class="btn-primary" style="padding:8px 14px;font-size:12px;">📞 Call Now</a>
+              <a href="https://wa.me/919611274117?text=Hi%20Diwakar,%20I%20checked%20out%20your%20AI%20Teleprompter%20project!" target="_blank" rel="noopener" class="btn-secondary" style="padding:8px 14px;font-size:12px;">💬 WhatsApp</a>
+              <button class="btn-secondary" style="padding:8px 12px;font-size:12px;" onclick="copyText('9611274117', this)">Copy</button>
+            </div>
+          </div>
+
+          <!-- Email Card -->
+          <div class="contact-card">
+            <div>
+              <div class="card-tag">ELECTRONIC MAIL</div>
+              <h3 class="card-title">Email Address</h3>
+              <div class="contact-value" style="margin-top:8px;">diwakarpratap80@gmail.com</div>
+              <p class="card-desc" style="margin-top:8px;">
+                For project inquiries, bug reports, feature requests, and engineering opportunities.
+              </p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <a href="mailto:diwakarpratap80@gmail.com?subject=AI%20Teleprompter%20Inquiry" class="btn-primary" style="padding:8px 14px;font-size:12px;">✉️ Send Email</a>
+              <button class="btn-secondary" style="padding:8px 12px;font-size:12px;" onclick="copyText('diwakarpratap80@gmail.com', this)">Copy Email</button>
+            </div>
+          </div>
+
+          <!-- LinkedIn Card -->
+          <div class="contact-card">
+            <div>
+              <div class="card-tag">PROFESSIONAL NETWORK</div>
+              <h3 class="card-title">LinkedIn Profile</h3>
+              <div class="contact-value" style="margin-top:8px;font-size:13px;">linkedin.com/in/diwakar-pratap-98688320a</div>
+              <p class="card-desc" style="margin-top:8px;">
+                Connect on LinkedIn to follow updates, view experience, and message directly.
+              </p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <a href="https://www.linkedin.com/in/diwakar-pratap-98688320a/" target="_blank" rel="noopener" class="btn-primary" style="padding:8px 14px;font-size:12px;">↗ Open LinkedIn</a>
+              <button class="btn-secondary" style="padding:8px 12px;font-size:12px;" onclick="copyText('https://www.linkedin.com/in/diwakar-pratap-98688320a/', this)">Copy Link</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Direct Quick Message Box -->
+        <div style="background:var(--bg-panel);border:1px solid var(--border-hairline);border-radius:8px;padding:30px;margin-top:28px;display:grid;grid-template-columns:1fr 1.2fr;gap:32px;">
+          <div>
+            <div class="card-tag">QUICK MESSAGE DISPATCH</div>
+            <h3 class="card-title" style="font-size:22px;">Send a Direct Note</h3>
+            <p class="card-desc" style="margin-top:8px;">
+              Leave a message directly on the server or dispatch it immediately via WhatsApp / Email to Diwakar Pratap. Include your Device ID (e.g., <code>SUT-XXXX</code>) if requesting a license limit upgrade.
+            </p>
+            <div style="margin-top:20px;padding:14px;background:#0c0c0e;border:1px solid var(--border-hairline);border-radius:6px;font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);">
+              <div><strong>Creator:</strong> Diwakar Pratap</div>
+              <div style="margin-top:4px;"><strong>Phone:</strong> 9611274117</div>
+              <div style="margin-top:4px;"><strong>Email:</strong> diwakarpratap80@gmail.com</div>
+            </div>
+          </div>
+
+          <form onsubmit="submitContactForm(event)" style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <input type="text" id="contact-name" class="form-input" placeholder="Your Name" required />
+              <input type="text" id="contact-email" class="form-input" placeholder="Your Email or Phone" required />
+            </div>
+            <input type="text" id="contact-subject" class="form-input" placeholder="Subject (e.g. Build Feedback, License Request, Collaboration)" required />
+            <textarea id="contact-message" rows="4" class="form-textarea" placeholder="Write your message for Diwakar..." required></textarea>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+              <button type="submit" class="btn-primary">Send Message to Diwakar</button>
+              <span id="contact-status" style="font-family:var(--font-mono);font-size:12px;color:var(--accent-green);"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <div style="max-width:380px;">
+        <div class="brand" onclick="switchPage('home')" style="margin-bottom:10px;">
+          <div class="brand-mark">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f3f1ec" stroke-width="2">
+              <rect x="3" y="4" width="18" height="14" rx="2"/>
+              <path d="M7 9h10M7 13h6"/>
+            </svg>
+          </div>
+          <span class="brand-title">AI Teleprompter</span>
+        </div>
+        <p style="font-size:13px;color:var(--text-muted);">
+          Real-time transparent desktop co-pilot for interviews and engineering meetings. Designed & built by Diwakar Pratap.
+        </p>
+      </div>
+
+      <div style="display:flex;gap:48px;flex-wrap:wrap;">
+        <div>
+          <div class="card-tag">NAVIGATION</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text-secondary);">
+            <a href="/" onclick="event.preventDefault();switchPage('home')">Overview</a>
+            <a href="/download" onclick="event.preventDefault();switchPage('download')">Download Build (.EXE)</a>
+            <a href="/how-to-use" onclick="event.preventDefault();switchPage('how-to-use')">How to Use Guide</a>
+            <a href="/about" onclick="event.preventDefault();switchPage('about')">About Project</a>
+            <a href="/contact" onclick="event.preventDefault();switchPage('contact')">Contact</a>
+          </div>
+        </div>
+
+        <div>
+          <div class="card-tag">DIWAKAR PRATAP · CONTACT</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text-secondary);font-family:var(--font-mono);">
+            <a href="tel:+919611274117">📞 +91 9611274117</a>
+            <a href="mailto:diwakarpratap80@gmail.com">✉️ diwakarpratap80@gmail.com</a>
+            <a href="https://www.linkedin.com/in/diwakar-pratap-98688320a/" target="_blank" rel="noopener">↗ LinkedIn Profile</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // ─── BACKEND GATEWAY & VISITOR TELEMETRY (CLOUDFLARE PAGES + NGROK READY) ───
+    const BACKEND_BASE = (
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname.includes('ngrok')
+    ) ? window.location.origin : 'https://salvaging-quiver-preheated.ngrok-free.dev';
+
+    function getVisitorId() {
+      try {
+        let vid = localStorage.getItem('aitp_visitor_id');
+        if (!vid) {
+          vid = 'VIS-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+          localStorage.setItem('aitp_visitor_id', vid);
+        }
+        return vid;
+      } catch (e) {
+        return 'VIS-ANON';
+      }
+    }
+
+    function trackWebsiteEvent(eventType, pageId, details = '') {
+      try {
+        const payload = {
+          visitor_id: getVisitorId(),
+          event_type: eventType || 'page_view',
+          page: pageId || 'home',
+          host: window.location.origin || window.location.hostname,
+          referrer: document.referrer || '',
+          screen: `${window.innerWidth}x${window.innerHeight}`,
+          language: navigator.language || '',
+          timezone: (Intl && Intl.DateTimeFormat) ? Intl.DateTimeFormat().resolvedOptions().timeZone : '',
+          user_agent: navigator.userAgent || '',
+          details: details
+        };
+        fetch(`${BACKEND_BASE}/api/v1/traffic/track`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': '69420'
+          },
+          body: JSON.stringify(payload),
+          keepalive: true
+        }).catch(() => {});
+      } catch (e) {}
+    }
+
+    // Ensure all .exe download links resolve cleanly from any SPA route (/download, /about, etc.)
+    document.querySelectorAll('.dl-exe-link').forEach(link => {
+      link.href = '/download/AI-Teleprompter-0.1.0-Portable.exe';
+    });
+
+    // ─── MULTI-PAGE ROUTER (SUPPORTS /, /download, /how-to-use, /about, /contact) ───
+    const VALID_PAGES = ['home', 'download', 'how-to-use', 'about', 'contact'];
+
+    function switchPage(pageId, pushHistory = true) {
+      if (!VALID_PAGES.includes(pageId)) pageId = 'home';
+
+      document.querySelectorAll('.page-view').forEach(el => el.classList.remove('active'));
+      const target = document.getElementById('page-' + pageId);
+      if (target) target.classList.add('active');
+
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-page') === pageId);
+      });
+
+      if (pushHistory) {
+        try {
+          const newPath = pageId === 'home' ? '/' : '/' + pageId;
+          window.history.pushState({ page: pageId }, '', newPath);
+        } catch (e) {}
+        trackWebsiteEvent('page_view', pageId, `Navigated to /${pageId === 'home' ? '' : pageId}`);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    window.addEventListener('popstate', () => {
+      const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      const targetPage = VALID_PAGES.includes(path) ? path : 'home';
+      switchPage(targetPage, false);
+      trackWebsiteEvent('page_view', targetPage, 'Browser history navigation');
+    });
+
+    // Initialize correct tab from URL on load & record visitor hit
+    (function initRoute() {
+      const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      const initialPage = VALID_PAGES.includes(path) ? path : 'home';
+      if (VALID_PAGES.includes(path)) {
+        switchPage(path, false);
+      }
+      trackWebsiteEvent('page_view', initialPage, 'Initial website visit');
+    })();
+
+    // ─── INTERACTIVE HUD SIMULATOR LOGIC ───
+    const SCENARIOS = [
+      {
+        q: '"How would you design a distributed rate limiter across multiple API gateway nodes?"',
+        answers: {
+          human: "In production, I use a Redis-backed Sliding Window or Token Bucket with Lua scripts so check-and-decrement happens atomically in a single round-trip.\n\nTo keep gateway latency under 2ms during traffic spikes, I pair Redis with a short local in-memory batch allowance on each gateway node.",
+          concise: "• Use Redis + atomic Lua scripts for Token Bucket state.\n• Add local in-memory counter caching to keep p99 latency < 2ms.\n• Fallback to local leaky-bucket if Redis cluster partitions.",
+          star: "SITUATION: Our API gateway needed to throttle 80k req/sec across 12 nodes.\nTASK: Prevent race conditions without adding >3ms latency.\nACTION: Implemented atomic Redis Lua Token Bucket with local burst buffers.\nRESULT: Blocked 99.8% of abusive spikes with 1.1ms overhead."
+        }
+      },
+      {
+        q: '"1) Why does Python have a GIL, and 2) when should you use asyncio vs multiprocessing?"',
+        answers: {
+          human: "1. Python's GIL exists to keep CPython's reference-counting memory management thread-safe and fast for single-threaded code without fine-grained lock overhead.\n\n2. Use asyncio when you're waiting on network, WebSockets, or database I/O; use multiprocessing when you're saturating CPU cores with heavy number crunching or ML inference.",
+          concise: "1. GIL: Protects CPython reference counting from race conditions.\n2. Asyncio vs Multiprocessing: Use asyncio for high-concurrency network/disk I/O; use multiprocessing for CPU-bound parallel workloads.",
+          star: "1. GIL Purpose: Simplifies CPython memory safety around reference counts.\n2. Practical Choice: In AI Teleprompter, we use asyncio for WebSocket token streaming and separate threads/processes for CPU audio transcription."
+        }
+      },
+      {
+        q: '"Tell me about a time a production deployment failed and how you handled it."',
+        answers: {
+          human: "During a schema rollout, a missing composite index caused connection pool exhaustion under peak load. I immediately triggered a feature-flag rollback to restore traffic in under 90 seconds, then built the index concurrently with zero downtime and added query-plan checks to CI.",
+          concise: "• Rolled back deployment in 90s via feature flag when DB connections spiked.\n• Created missing index using CREATE INDEX CONCURRENTLY.\n• Added automated migration query-plan linting to prevent recurrence.",
+          star: "SITUATION: Production API latency spiked due to an unindexed lookup.\nTASK: Restore service SLA immediately without data loss.\nACTION: Executed instant rollback and applied non-blocking concurrent indexing.\nRESULT: Full recovery in 90s and zero migration incidents since."
+        }
+      }
+    ];
+
+    let currentScenarioIdx = 0;
+    let streamTimer = null;
+
+    function runSimScenario(idx, btnEl) {
+      currentScenarioIdx = idx;
+      if (btnEl) {
+        document.querySelectorAll('.scenario-pill').forEach(b => b.classList.remove('active'));
+        btnEl.classList.add('active');
+      }
+      const persona = document.getElementById('sim-persona-select').value;
+      const item = SCENARIOS[idx];
+      document.getElementById('sim-question-text').textContent = item.q;
+      streamSimulatedText(item.answers[persona] || item.answers.human, persona);
+    }
+
+    function rerunCurrentScenario() {
+      const persona = document.getElementById('sim-persona-select').value;
+      const item = SCENARIOS[currentScenarioIdx];
+      streamSimulatedText(item.answers[persona] || item.answers.human, persona);
+    }
+
+    function triggerCustomSimQuestion() {
+      const inp = document.getElementById('sim-custom-input');
+      const q = inp.value.trim();
+      if (!q) return;
+      document.getElementById('sim-question-text').textContent = '"' + q + '"';
+      inp.value = '';
+      const persona = document.getElementById('sim-persona-select').value;
+      const reply = "For \"" + q + "\", focus on clear trade-offs: start with the core mechanism, cite a real production metric from your resume, and keep the explanation conversational so you can deliver it naturally on camera.";
+      streamSimulatedText(reply, persona);
+    }
+
+    function streamSimulatedText(fullText, persona) {
+      if (streamTimer) clearInterval(streamTimer);
+      const outEl = document.getElementById('sim-ai-output');
+      const badgeEl = document.getElementById('sim-state-badge');
+      const countEl = document.getElementById('sim-token-counter');
+      const personaTag = document.getElementById('sim-persona-tag');
+
+      personaTag.textContent = persona === 'concise' ? 'CONCISE MODE' : (persona === 'star' ? 'STAR METHOD' : 'HUMAN TONE');
+      badgeEl.textContent = '[STREAMING]';
+      badgeEl.style.color = 'var(--accent-green)';
+      outEl.textContent = '';
+
+      const words = fullText.split(' ');
+      let i = 0;
+      streamTimer = setInterval(() => {
+        if (i < words.length) {
+          outEl.textContent += (i === 0 ? '' : ' ') + words[i];
+          i++;
+          countEl.textContent = i + ' tokens';
+        } else {
+          clearInterval(streamTimer);
+          badgeEl.textContent = '[LISTENING]';
+        }
+      }, 28);
+    }
+
+    function stopSimStream() {
+      if (streamTimer) clearInterval(streamTimer);
+      const badgeEl = document.getElementById('sim-state-badge');
+      badgeEl.textContent = '[STOPPED · READY FOR NEW QUESTION]';
+      badgeEl.style.color = 'var(--accent-amber)';
+    }
+
+    function updateSimOpacity(val) {
+      document.getElementById('sim-opacity-val').textContent = val + '%';
+      document.getElementById('sim-hud-window').style.opacity = (val / 100).toFixed(2);
+    }
+
+    function toggleSimGhost(enabled) {
+      const ind = document.getElementById('sim-ghost-indicator');
+      const hud = document.getElementById('sim-hud-window');
+      ind.textContent = enabled ? 'CLICK-THROUGH: ON (GHOST)' : 'CLICK-THROUGH: OFF';
+      ind.style.color = enabled ? 'var(--accent-green)' : 'var(--text-muted)';
+      hud.style.borderColor = enabled ? 'var(--accent-orange)' : 'rgba(255,255,255,0.16)';
+    }
+
+    function copyText(text, btn) {
+      navigator.clipboard.writeText(text);
+      const orig = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      setTimeout(() => { btn.textContent = orig; }, 1600);
+    }
+
+    async function submitContactForm(e) {
+      e.preventDefault();
+      const statusEl = document.getElementById('contact-status');
+      const payload = {
+        visitor_id: getVisitorId(),
+        name: document.getElementById('contact-name').value.trim(),
+        contact: document.getElementById('contact-email').value.trim(),
+        subject: document.getElementById('contact-subject').value.trim(),
+        message: document.getElementById('contact-message').value.trim()
+      };
+      statusEl.textContent = 'Sending...';
+      try {
+        const res = await fetch(`${BACKEND_BASE}/api/v1/contact`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': '69420'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          statusEl.textContent = '✓ Message received! Diwakar will get back to you shortly.';
+          e.target.reset();
+        } else {
+          statusEl.textContent = '✓ Opening email client...';
+          window.location.href = `mailto:diwakarpratap80@gmail.com?subject=${encodeURIComponent(payload.subject)}&body=${encodeURIComponent('From: ' + payload.name + ' (' + payload.contact + ')\n\n' + payload.message)}`;
+        }
+      } catch (err) {
+        window.location.href = `mailto:diwakarpratap80@gmail.com?subject=${encodeURIComponent(payload.subject)}&body=${encodeURIComponent('From: ' + payload.name + ' (' + payload.contact + ')\n\n' + payload.message)}`;
+      }
+    }
+
+    // Fetch live build metadata
+    fetch(`${BACKEND_BASE}/api/v1/build-info`, {
+      headers: { 'ngrok-skip-browser-warning': '69420' }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.size_mb) {
+          document.getElementById('hero-build-size').textContent = data.size_mb + ' MB';
+          document.getElementById('dl-btn-size').textContent = data.size_mb + ' MB';
+          document.getElementById('dl-table-size').textContent = data.size_mb + ' MB (' + Number(data.size_bytes).toLocaleString() + ' bytes)';
+        }
+      })
+      .catch(() => {});
+
+    // Start first simulation on load
+    runSimScenario(0);
+  </script>
+</body>
+</html>
